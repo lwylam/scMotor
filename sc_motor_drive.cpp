@@ -17,7 +17,7 @@ using namespace sFnd;
 int CheckMotorNetwork();
 void SendMotorCmd(int n);
 void SolveCubicCoef(int loop_i);
-int SolveParaBlend(int loop_i);
+int SolveParaBlend(int loop_i, bool showAttention = false);
 int32_t ToMotorCmd(int motorID, double length);
 
 vector<string> comHubPorts;
@@ -352,7 +352,7 @@ void SolveCubicCoef(int loop_i){
     }
 }
 
-int SolveParaBlend(int loop_i){
+int SolveParaBlend(int loop_i, bool showAttention){
     // make them accessable from outside??
     float vMax[6] = {.01, .001, .01, 0.8, 0.8, 0.8}; // Define the maximum velocity for each DoF
     float aMax[6] = {.01, .01, .01, .01, .01, .01}; // Define the maximum acceleration for each DoF
@@ -368,7 +368,7 @@ int SolveParaBlend(int loop_i){
             return -1;
         }
         else if (tb[i] > dura / 2){
-            cout << "ATTENTION: Trajectory for DoF " << i << " will be in cubic form.\n";
+            if (showAttention){ cout << "ATTENTION: Trajectory for DoF " << i << " will be in cubic form.\n"; }
             tb[i] = dura / 2;
             vMax[i] = (Q[i] - sQ[i]) / dura;
         }
@@ -393,26 +393,10 @@ int SolveParaBlend(int loop_i){
 }
 
 int32_t ToMotorCmd(int motorID, double length){
-    double offset = -5.5; // dummy value, the offset from "zero position"
+    double offset[4] = {6.43438, 7.67390, 6.06174, 4.48486}; // length to offset, from "zero position"
     double scale = 814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05)
-    switch (motorID){ // only 4 motors are assumed to present
-    case 0:
-        offset = -6.43438;
-        break;
-    case 1:
-        offset = -7.67390;
-        break;
-    case 2:
-        offset = -6.06174;
-        break;
-    case 3:
-        offset = -4.48486;
-        break;
     
-    default:
-        break;
-    }
-    return (length + offset) * scale;
+    return (length - offset[motorID]) * scale;
 }
 
 void SendMotorCmd(int n){
