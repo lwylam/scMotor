@@ -219,10 +219,11 @@ int main()
         double targetTrq = 3;
         double targetVel;
         double Kq = 5;
-
+        
+        cout << "Node " << n << " start torque test" << endl;
         for (int i = 0; i < 30; i++){
-            nodeList[n]->Motion.TrqCommanded.Refresh();
-			float motorCur = nodeList[n]->Motion.TrqCommanded.Value();
+            nodeList[n]->Motion.TrqMeasured.Refresh();
+			float motorCur = nodeList[n]->Motion.TrqMeasured.Value();
             targetVel = -Kq * (targetTrq + motorCur);
             printf("Current size: \t%f \t%f \n", motorCur, targetVel);
             nodeList[n]->Motion.Adv.MoveVelStart(targetVel);
@@ -231,6 +232,26 @@ int main()
                 nodeList[n]->Motion.Adv.MoveVelStart(0);
                 break;
             }
+            // int multiplier = 100;
+            // int actualMove = 10;
+            // int moveSize = 10;
+            // nodeList[n]->Motion.TrqCommanded.Refresh();
+            // float currentTorque = nodeList[n]->Motion.TrqCommanded.Value();
+            // actualMove = moveSize * abs(currentTorque);
+            // cout << actualMove << endl;
+            // if (currentTorque < 3) {
+            //     nodeList[n]->Motion.MovePosnStart(actualMove+ moveSize * multiplier);
+            //     //myMgr->Delay(nodeList[n]->Motion.MovePosnDurationMsec(actualMove + moveSize * multiplier));
+            //     cout << "adding " << actualMove << endl;
+            //     cout << "Moving time delay: " << nodeList[n]->Motion.MovePosnDurationMsec(actualMove * 100) << endl;
+            // }
+            // else {
+            //     nodeList[n]->Motion.MovePosnStart(-1* actualMove - moveSize * multiplier);
+            //     //myMgr->Delay(nodeList[n]->Motion.MovePosnDurationMsec(-1 * actualMove - moveSize * multiplier));
+            //     cout << "subtracting " << actualMove << endl;
+            //     cout << "Moving time delay: " << nodeList[n]->Motion.MovePosnDurationMsec(actualMove * 100) << endl;
+            // }
+            // printf("Current torque: \t%8.0f \n", currentTorque);
 
             // show frequency
             auto now = chrono::steady_clock::now();
@@ -238,6 +259,9 @@ int main()
             previousT = now;
             cout << "Loop time: "<< dur << endl;
         }
+        nodeList[n]->Motion.Adv.MoveVelStart(0);
+        cout << "Node " << n << " complete torque test\n" << endl;
+        Sleep(2000);
     }
     
     Sleep(6000); // wait a little more before disabling the nodes
