@@ -16,6 +16,7 @@ using namespace sFnd;
 
 int CheckMotorNetwork();
 void SendMotorCmd(int n);
+void SendMotorTrq(int n);
 void SolveCubicCoef(int loop_i);
 int SolveParaBlend(int loop_i, bool showAttention = false);
 int32_t ToMotorCmd(int motorID, double length);
@@ -25,10 +26,11 @@ vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
 vector<double> timeout;
 unsigned int portCount;
+const int targetTorque = -3; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
-const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton
+const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double in1[6] = {2, 0.5, 2, 0, 0, 0};
-double out1[4] = {6.43438, 7.6739, 6.06174, 4.48486};
+double out1[4] = {6.43438, 7.6739, 6.06174, 4.48486}; // assume there are 4 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
 int main()
@@ -49,26 +51,63 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    // if motors's states are right, do some current mode and homing here
-    {
-        bool allDone = false;
-        for (int n = 0; n<myPort.NodeCount(); n++) { 
-            nodeList[n]->Motion.MoveWentDone();
-            nodeList[n]->Motion.MovePosnStart(0, true); // absolute position
-        }
-        while(!allDone) {
-            for (INode* n : nodeList) {
-                if(!n->Motion.MoveIsDone()) {
-                    break;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\nn - Move on to Next step" << endl;
+    char cmd;
+    do {
+        bool allDone = false, stabilized = false;
+        cin >> cmd;
+        switch (cmd){
+            case 't':   //Tighten cables according to torque
+                while(!stabilized) {
+                    // thread th4(SendMotorTrq,3);
+                    // thread th3(SendMotorTrq,2);
+                    thread th2(SendMotorTrq,1);
+                    thread th1(SendMotorTrq,0);
+                    // th4.join();
+                    // th3.join();
+                    th2.join();
+                    th1.join();
+                    myPort.Adv.TriggerMovesInGroup(1);
+                    while(!allDone) {
+                        for (INode* n : nodeList) {
+                            if(!n->Motion.MoveIsDone()) { break; }
+                            allDone = true;
+                        }
+                    }
+                    for (INode* n : nodeList) {
+                        if(n->Motion.TrqCommanded.Value() > targetTorque) { break; }
+                        stabilized = true;
+                    }
                 }
-                allDone = true;
-            }
+                cout << "Torque mode tightening completed" << endl;
+                break;
+            case 's':   // Set zero
+                for (int n = 0; n < nodeList.size(); n++){
+                    nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
+                }
+                cout << "Setting zero completed" << endl;
+                break;
+            case 'h':   // Homing
+                allDone = false;
+                for (int n = 0; n<myPort.NodeCount(); n++) { 
+                    nodeList[n]->Motion.MoveWentDone();
+                    nodeList[n]->Motion.MovePosnStart(0, true); // absolute position
+                }
+                while(!allDone) {
+                    for (INode* n : nodeList) {
+                        if(!n->Motion.MoveIsDone()) { break; }
+                        allDone = true;
+                    }
+                }
+                cout << "Homing completed" << endl;
+                break;
+            case 'n':
+                cmd = 'p'; // do we need this?
+                break;
+            default:
+                break;
         }
-        cout << "Homing completed" << endl;
-        Sleep(2000);
-    }
-    
-    //myNode.Motion.AddToPosition(-myNode.Motion.PosnMeasured); // SAMPLE: Zeroing the number space around the current Measured Position
+    } while(cmd != 'n');
     
     // Read input file for traj-gen
     ifstream file ("input.csv");  // TODO: invalid read?
@@ -183,34 +222,6 @@ int main()
         cout << "----------Completed point " << i <<"----------" << endl;
         // loop over again until the entire motion is completed? exit programme
     }
-
-    // Test velocity mode
-    /*for (int n = 0; n<myPort.NodeCount(); n++) { 
-        double vel = 600;
-        cout << "Node " << n << " start velocity mode: "<< vel << endl;
-        cout << "Expected time: " << nodeList[n]->Motion.MoveVelDurationMsec(vel) << endl;
-        
-        auto start = chrono::steady_clock::now();
-        nodeList[n]->Motion.MoveVelStart(vel);
-        while(!nodeList[n]->Motion.VelocityAtTarget()){}
-        auto end = chrono::steady_clock::now();
-        auto dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-        cout << "Time elapsed: " << dur << endl;
-        for(int i = 0; i < 10; i++){
-            double pos1 = nodeList[n]->Motion.PosnMeasured;
-            Sleep(98); //100-2
-            double pos2 = nodeList[n]->Motion.PosnMeasured;
-            cout << "Measured velocity: " << (pos2-pos1)/0.1/6400*60 << " RPM" << endl;
-            //Sleep(500);
-        }
-        auto start_p = chrono::steady_clock::now();
-        cout << "Teknic report vel: " << (double)nodeList[n]->Motion.VelMeasured << endl;
-        //double pos = nodeList[n]->Motion.PosnMeasured;
-        auto end_p = chrono::steady_clock::now();
-        auto dur_p = chrono::duration_cast<chrono::milliseconds>(end_p-start_p).count();
-        nodeList[n]->Motion.MoveVelStart(0);
-        cout << "Velocity set 0\tRequest velocity time: " << dur_p << endl;
-    } */
 
     // Test torque control frequency
     for (int n = 0; n < nodeList.size(); n++){
@@ -410,4 +421,19 @@ void SendMotorCmd(int n){
     cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
 
     // should we put some saftely factor on tracking position error? set a flag
+}
+
+void SendMotorTrq(int n){
+    //float tolerance = 0.1;
+    float Kp = 100;
+
+    nodeList[n]->Motion.MoveWentDone();
+    nodeList[n]->Motion.TrqCommanded.Refresh();
+    float currentTorque = nodeList[n]->Motion.TrqCommanded.Value();
+    int moveSize = Kp * (targetTorque - currentTorque);
+    nodeList[n]->Motion.MovePosnStart(moveSize, false, true);
+    nodeList[n]->Motion.Adv.TriggerGroup(1);
+    printf("Node[%d], current torque: \t%6.0f \n", n, currentTorque);
+
+    // any safety measures for extremely large torques?
 }
