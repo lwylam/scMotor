@@ -54,13 +54,13 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\nn - Move on to Next step" << endl;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nn - Move on to Next step" << endl;
     char cmd;
     do {
         bool allDone = false, stabilized = false;
         cin >> cmd;
         switch (cmd){
-            case 't':   //Tighten cables according to torque
+            case 't':   // Tighten cables according to torque
                 while(!stabilized) {
                     SendMotorGrp(true);
                     while(!allDone) {
@@ -96,12 +96,35 @@ int main()
                 }
                 cout << "Homing completed" << endl;
                 break;
-            case 'n':
+            case '8':   // Manual cable adjustment
+                cout << "0 to 7 - motor id to adjust cable length\na or d - increase or decrease cable length\nb - Back to previous menu\n";
+                while(cmd != 'b'){
+                    cin >> cmd;
+                    if('/' < cmd && cmd < nodeList.size()+48){
+                        int id = cmd - 48;
+                        int sCount = 50000;
+                        cout << "Motor "<< cmd <<" selected.\n";
+                        do{
+                            cmd = getch();
+                            switch(cmd){
+                                case 'a':
+                                nodeList[id]->Motion.MovePosnStart(sCount);
+                                break;
+                                case 'd':
+                                nodeList[id]->Motion.MovePosnStart(-sCount);
+                                break;
+                            }
+                            Sleep(100); // do we need this?
+                        }while(cmd =='a'|| cmd =='d');
+                        cout << "Motor "<< id <<" deselected.\n";
+                    }
+                }
+                cout << "Manual adjustment terminated" << endl;
                 break;
             default:
                 break;
         }
-    } while(cmd != 'n');
+    } while(cmd != 'n'); 
     
     cout << "Choose from menu for cable robot motion:\nr - Read from \"input.csv\" file\nm - Manual input using w,a,s,d\nany other key - Disable motors and exit programme" << endl;
     cin >> cmd;
