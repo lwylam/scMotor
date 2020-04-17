@@ -19,6 +19,7 @@ int CheckMotorNetwork();
 void SendMotorCmd(int n);
 void SendMotorTrq(int n);
 void SolveCubicCoef(int loop_i);
+void SendMotorGrp(bool IsTorque = false);
 int SolveParaBlend(int loop_i, bool showAttention = false);
 int32_t ToMotorCmd(int motorID, double length);
 
@@ -27,7 +28,7 @@ vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
 vector<double> timeout;
 unsigned int portCount;
-const double step = 0.1; // in meters
+const double step = 0.01; // in meters, for manual control
 const int targetTorque = -3; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
 const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
@@ -61,15 +62,7 @@ int main()
         switch (cmd){
             case 't':   //Tighten cables according to torque
                 while(!stabilized) {
-                    // thread th4(SendMotorTrq,3);
-                    // thread th3(SendMotorTrq,2);
-                    thread th2(SendMotorTrq,1);
-                    thread th1(SendMotorTrq,0);
-                    // th4.join();
-                    // th3.join();
-                    th2.join();
-                    th1.join();
-                    myPort.Adv.TriggerMovesInGroup(1);
+                    SendMotorGrp(true);
                     while(!allDone) {
                         for (INode* n : nodeList) {
                             if(!n->Motion.MoveIsDone()) { break; }
@@ -172,28 +165,18 @@ int main()
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                 cout << "Step to command time: "<< dur << "\t";
 
-                // thread th4(SendMotorCmd,3);
-                // thread th3(SendMotorCmd,2);
-                thread th2(SendMotorCmd,1);
-                thread th1(SendMotorCmd,0);
-                
+                SendMotorGrp();
+
                 // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
                 // cout << "Estimated time: " << t_max;
                 end = chrono::steady_clock::now();
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                 cout << " Before sleep: " << dur << endl;
                 
-                double dif = MILLIS_TO_NEXT_FRAME - dur - 2;
+                double dif = MILLIS_TO_NEXT_FRAME - dur;
                 if(dif > 0) { Sleep(dif);}
                 // Sleep(MILLIS_TO_NEXT_FRAME);
 
-                // wait sending motor command to complete before triggering motors to move
-                // th4.join();
-                // th3.join();
-                th2.join();
-                th1.join();
-                
-                myPort.Adv.TriggerMovesInGroup(1);
                 end = chrono::steady_clock::now();
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                 cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
@@ -231,19 +214,12 @@ int main()
                     break;
             }
             cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            if(0<=in1[0] && in1[0]<=5 && 0<=in1[2] && in1[2]<=5){
+            if(0<=in1[0] && in1[0]<=5 && 0<=in1[2] && in1[2]<=5){ //TODO: define workspace bounds somewhere else
                 compile_lengths(in1, out1);
                 cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
 
-                // thread th4(SendMotorCmd,3);
-                // thread th3(SendMotorCmd,2);
-                thread th2(SendMotorCmd,1);
-                thread th1(SendMotorCmd,0);
-                // th4.join();
-                // th3.join();
-                th2.join();
-                th1.join();
-                myPort.Adv.TriggerMovesInGroup(1);
+                SendMotorGrp();
+                
                 // should we wait for a while here??
             }
             else{
@@ -464,4 +440,28 @@ void SendMotorTrq(int n){
     printf("Node[%d], current torque: \t%6.0f \n", n, currentTorque);
 
     // any safety measures for extremely large torques?
+}
+
+void SendMotorGrp(bool IsTorque){
+    SysManager* myMgr = SysManager::Instance();
+    IPort &myPort = myMgr->Ports(0);
+    void (*func)(int){ SendMotorCmd };
+    if(IsTorque){ func = SendMotorTrq; }
+    // thread th8((*func),7);
+    // thread th7((*func),6);
+    // thread th6((*func),5);
+    // thread th5((*func),4);
+    // thread th4((*func),3);
+    // thread th3((*func),2);
+    thread th2((*func),1);
+    thread th1((*func),0);
+    // th8.join();
+    // th7.join();
+    // th6.join();
+    // th5.join();
+    // th4.join();
+    // th3.join();
+    th2.join();
+    th1.join();
+    myPort.Adv.TriggerMovesInGroup(1);
 }
