@@ -7,6 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <stdio.h>
+#include <conio.h>
 #include <windows.h>
 #include "compile_lengths.h"
 #include "Dependencies\sFoundation20\inc\pubSysCls.h"
@@ -26,6 +27,7 @@ vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
 vector<double> timeout;
 unsigned int portCount;
+const double step = 0.1; // in meters
 const int targetTorque = -3; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
 const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
@@ -36,7 +38,7 @@ double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficien
 int main()
 {
     SysManager* myMgr = SysManager::Instance();
-    
+
     // Start the programme, scan motors in network
     try{
         if (CheckMotorNetwork() < 0){
@@ -102,129 +104,174 @@ int main()
                 cout << "Homing completed" << endl;
                 break;
             case 'n':
-                cmd = 'p'; // do we need this?
                 break;
             default:
                 break;
         }
     } while(cmd != 'n');
     
-    // Read input file for traj-gen
-    ifstream file ("input.csv");  // TODO: invalid read?
-    vector<double> row;
-    string line, word, temp;
-    if(file.is_open()){
-        while (getline(file, line)){
-            row.clear();
-            stringstream s(line);
-            while (s >> word){
-                row.push_back(stod(word)); // convert string to double stod()
+    cout << "Choose from menu for cable robot motion:\nr - Read from \"input.csv\" file\nm - Manual input using w,a,s,d\nany other key - Disable motors and exit programme" << endl;
+    cin >> cmd;
+    if (cmd == 'r' || cmd =='R'){
+        // Read input file for traj-gen
+        ifstream file ("input.csv");  // TODO: invalid read?
+        vector<double> row;
+        string line, word, temp;
+        if(file.is_open()){
+            while (getline(file, line)){
+                row.clear();
+                stringstream s(line);
+                while (s >> word){
+                    row.push_back(stod(word)); // convert string to double stod()
+                }
+                points.push_back(row);
             }
-            points.push_back(row);
+            cout << "Completed reading external input file" << endl;
         }
-        cout << "Completed reading external input file" << endl;
-    }
-    
-    // Go through the given points
-    for (int i = 0; i < points.size(); i++){
-        double t = 0;
-        // trajectory generation and points splitting
-        // SolveCubicCoef(i);
-        if(SolveParaBlend(i) < 0){ return -3; }
-        cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
-            
-        while (t <= points[i][6]){
-            auto start = chrono::steady_clock::now();
-            long dur = 0;
-            
-        // per time step pose
-            // CUBIC equation
-            // for (int j = 0; j < 6; j++){
-            //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
-            // }
-            // PARABOLIC BLEND equation
-            for (int j = 0; j < 6; j++){
-                if (t <= tb[j]){
-                    in1[j] = a[j] + b[j] * t * t;
-                }
-                else if(t <= points[i][6]-tb[j]){
-                    in1[j] = c[j] + d[j];
-                }
-                else{
-                    in1[j] = e[j] + f[j] * t + g[j] * t * t;
-                }
-            }
-            // get absolute cable lengths in meters
-            cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
-            compile_lengths(in1, out1);
-            cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
-            
-            auto end = chrono::steady_clock::now();
-            dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-            cout << "Step to command time: "<< dur << "\t";
+        else{
+            cout << "Failed to read input file. Exit programme." << endl;
+            return -1;
+        }
 
-            // thread th4(SendMotorCmd,3);
-            // thread th3(SendMotorCmd,2);
-            thread th2(SendMotorCmd,1);
-            thread th1(SendMotorCmd,0);
-            
-            //bool allDone = false;
-            
-            // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
-            // cout << "Estimated time: " << t_max;
-            end = chrono::steady_clock::now();
-            dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-            cout << " Before sleep: " << dur << endl;
-            
-            // double dif = MILLIS_TO_NEXT_FRAME - dur - 2;
-            // if(dif > 0) { Sleep(dif);}
-            Sleep(MILLIS_TO_NEXT_FRAME);
-
-            // if(*max_element(timeout.begin(), timeout.end())>MILLIS_TO_NEXT_FRAME){
-            //     cout << "Cannot complete motion in given duration. Exit programme." << endl;
-            //     return -1;
-            // }
-            
-            // wait for respond
-            /*while(!allDone) { //&& dur < MILLIS_TO_NEXT_FRAME
+        // Go through the given points
+        for (int i = 0; i < points.size(); i++){
+            double t = 0;
+            // trajectory generation and points splitting
+            // SolveCubicCoef(i);
+            if(SolveParaBlend(i) < 0){ return -3; }
+            cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
+                
+            while (t <= points[i][6]){
+                auto start = chrono::steady_clock::now();
+                long dur = 0;
+                
+                // per time step pose
+                // CUBIC equation
+                // for (int j = 0; j < 6; j++){
+                //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
+                // }
+                // PARABOLIC BLEND equation
+                for (int j = 0; j < 6; j++){
+                    if (t <= tb[j]){
+                        in1[j] = a[j] + b[j] * t * t;
+                    }
+                    else if(t <= points[i][6]-tb[j]){
+                        in1[j] = c[j] + d[j];
+                    }
+                    else{
+                        in1[j] = e[j] + f[j] * t + g[j] * t * t;
+                    }
+                }
+                // get absolute cable lengths in meters
+                cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+                // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
+                compile_lengths(in1, out1);
+                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+                
                 auto end = chrono::steady_clock::now();
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                cout << "Step to command time: "<< dur << "\t";
 
-                if(!allDone){
-                    if (myMgr->TimeStampMsec() > t_max) {
-                        cout << "Error: Timed out waiting for move to complete" << endl;
-                        return -2;
-                    }
-                    for (INode* n : nodeList) {
-                        if(!n->Motion.IsReady()) { // or .MoveIsDone?
-                            //allDone = false;
-                            break;
-                        }
-                        allDone = true;
-                    } 
-                }
-            }*/
+                // thread th4(SendMotorCmd,3);
+                // thread th3(SendMotorCmd,2);
+                thread th2(SendMotorCmd,1);
+                thread th1(SendMotorCmd,0);
+                
+                // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
+                // cout << "Estimated time: " << t_max;
+                end = chrono::steady_clock::now();
+                dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                cout << " Before sleep: " << dur << endl;
+                
+                double dif = MILLIS_TO_NEXT_FRAME - dur - 2;
+                if(dif > 0) { Sleep(dif);}
+                // Sleep(MILLIS_TO_NEXT_FRAME);
 
-            // wait sending motor command to complete before triggering motors to move
-            // th4.join();
-            // th3.join();
-            th2.join();
-            th1.join();
-            
-            myPort.Adv.TriggerMovesInGroup(1);
-            end = chrono::steady_clock::now();
-            dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-            cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
-            timeout.clear();
-            t += MILLIS_TO_NEXT_FRAME;
+                // wait sending motor command to complete before triggering motors to move
+                // th4.join();
+                // th3.join();
+                th2.join();
+                th1.join();
+                
+                myPort.Adv.TriggerMovesInGroup(1);
+                end = chrono::steady_clock::now();
+                dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
+                timeout.clear();
+                t += MILLIS_TO_NEXT_FRAME;
+            }
+            cout << "----------Completed point " << i <<"----------" << endl;
         }
-        cout << "----------Completed point " << i <<"----------" << endl;
-        // loop over again until the entire motion is completed? exit programme
+    }
+    else if (cmd == 'm' || cmd =='M'){
+        cout << "Press 'q' to quit manual input and exit programme anytime.\t'h' for Homing\n";
+        while(cmd != 'q' && cmd != 'Q'){
+            cmd = getch();
+            switch(cmd){
+                case 'W':
+                case 'w':
+                    in1[0] += step;
+                    break;
+                case 'A':
+                case 'a':
+                    in1[2] -= step;
+                    break;
+                case 'S':
+                case 's':
+                    in1[0] -= step;
+                    break;
+                case 'D':
+                case 'd':
+                    in1[2] += step;
+                    break;
+                case 'H':
+                case 'h':
+                    cout << "Homing...\n";
+                    copy(begin(home), end(home), begin(in1));
+                    break;
+            }
+            cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+            if(0<=in1[0] && in1[0]<=5 && 0<=in1[2] && in1[2]<=5){
+                compile_lengths(in1, out1);
+                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+
+                // thread th4(SendMotorCmd,3);
+                // thread th3(SendMotorCmd,2);
+                thread th2(SendMotorCmd,1);
+                thread th1(SendMotorCmd,0);
+                // th4.join();
+                // th3.join();
+                th2.join();
+                th1.join();
+                myPort.Adv.TriggerMovesInGroup(1);
+                // should we wait for a while here??
+            }
+            else{
+                cout << "WARNING: Intended position out of bound!\n";
+                switch(cmd){
+                    case 'W':
+                    case 'w':
+                        in1[0] -= step;
+                        break;
+                    case 'A':
+                    case 'a':
+                        in1[2] += step;
+                        break;
+                    case 'S':
+                    case 's':
+                        in1[0] += step;
+                        break;
+                    case 'D':
+                    case 'd':
+                        in1[2] -= step;
+                        break;
+                }
+            }
+        }
     }
 
     // Test torque control frequency
-    for (int n = 0; n < nodeList.size(); n++){
+    /*for (int n = 0; n < nodeList.size(); n++){
         auto previousT = chrono::steady_clock::now();
         long dur = 0;
         double targetTrq = 3;
@@ -242,27 +289,7 @@ int main()
             if (motorCur < -15) { //safety measure
                 nodeList[n]->Motion.Adv.MoveVelStart(0);
                 break;
-            }
-            // int multiplier = 100;
-            // int actualMove = 10;
-            // int moveSize = 10;
-            // nodeList[n]->Motion.TrqCommanded.Refresh();
-            // float currentTorque = nodeList[n]->Motion.TrqCommanded.Value();
-            // actualMove = moveSize * abs(currentTorque);
-            // cout << actualMove << endl;
-            // if (currentTorque < 3) {
-            //     nodeList[n]->Motion.MovePosnStart(actualMove+ moveSize * multiplier);
-            //     //myMgr->Delay(nodeList[n]->Motion.MovePosnDurationMsec(actualMove + moveSize * multiplier));
-            //     cout << "adding " << actualMove << endl;
-            //     cout << "Moving time delay: " << nodeList[n]->Motion.MovePosnDurationMsec(actualMove * 100) << endl;
-            // }
-            // else {
-            //     nodeList[n]->Motion.MovePosnStart(-1* actualMove - moveSize * multiplier);
-            //     //myMgr->Delay(nodeList[n]->Motion.MovePosnDurationMsec(-1 * actualMove - moveSize * multiplier));
-            //     cout << "subtracting " << actualMove << endl;
-            //     cout << "Moving time delay: " << nodeList[n]->Motion.MovePosnDurationMsec(actualMove * 100) << endl;
-            // }
-            // printf("Current torque: \t%8.0f \n", currentTorque);
+            }  
 
             // show frequency
             auto now = chrono::steady_clock::now();
@@ -273,9 +300,10 @@ int main()
         nodeList[n]->Motion.Adv.MoveVelStart(0);
         cout << "Node " << n << " complete torque test\n" << endl;
         Sleep(2000);
-    }
+    }*/
     
-    Sleep(6000); // wait a little more before disabling the nodes
+    Sleep(4000); // wait a little more before disabling the nodes
+    cout << "Disabling motors and closing ports" << endl;
     for(int i = 0; i < nodeList.size(); i++){ //Disable Nodes
         myPort.Nodes(i).EnableReq(false);
     }
