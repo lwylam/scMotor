@@ -32,6 +32,7 @@ const double step = 0.01; // in meters, for manual control
 const int targetTorque = -3; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
 const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double offset[4] = {6.43438, 7.67390, 6.06174, 4.48486}; // L0, from "zero position"
 double in1[6] = {2, 0.5, 2, 0, 0, 0};
 double out1[4] = {6.43438, 7.6739, 6.06174, 4.48486}; // assume there are 4 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
@@ -80,6 +81,8 @@ int main()
                 for (int n = 0; n < nodeList.size(); n++){
                     nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
                 }
+                copy(begin(home), end(home), begin(in1));
+                compile_lengths(in1, offset);
                 cout << "Setting zero completed" << endl;
                 break;
             case 'h':   // Homing
@@ -431,9 +434,7 @@ int SolveParaBlend(int loop_i, bool showAttention){
 }
 
 int32_t ToMotorCmd(int motorID, double length){
-    double offset[4] = {6.43438, 7.67390, 6.06174, 4.48486}; // length to offset, from "zero position"
-    double scale = 814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05)
-    
+    double scale = 814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05) 
     return (length - offset[motorID]) * scale;
 }
 
