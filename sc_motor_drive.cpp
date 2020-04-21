@@ -28,8 +28,8 @@ vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
 vector<double> timeout;
 unsigned int portCount;
-const double step = 0.01; // in meters, for manual control
-const int targetTorque = -3; // in percentage, -ve for tension?
+const double step = 0.0005; // in meters, for manual control
+const int targetTorque = -5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
 const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[4] = {6.43438, 7.67390, 6.06174, 4.48486}; // L0, from "zero position"
@@ -62,20 +62,29 @@ int main()
         cin >> cmd;
         switch (cmd){
             case 't':   // Tighten cables according to torque
+                for(INode* n : nodeList){ n->Motion.AccLimit = 200; }
                 while(!stabilized) {
                     SendMotorGrp(true);
-                    while(!allDone) {
-                        for (INode* n : nodeList) {
-                            if(!n->Motion.MoveIsDone()) { break; }
-                            allDone = true;
-                        }
-                    }
+                    // while(!allDone) {
+                    //     for (INode* n : nodeList) {
+                    //         // if(!n->Motion.MoveIsDone()) { break; }
+                    //         if(!n->Motion.VelocityAtTarget()) { break; }
+                    //         allDone = true;
+                    //     }
+                    // }
+                    Sleep(50);
                     for (INode* n : nodeList) {
                         if(n->Motion.TrqCommanded.Value() > targetTorque) { break; }
                         stabilized = true;
                     }
                 }
-                cout << "Torque mode tightening completed" << endl;
+                for(INode* n : nodeList){
+                    n->Motion.TrqCommanded.Refresh();
+                    cout << n->Motion.TrqCommanded.Value() << "\t";
+                    n->Motion.MoveVelStart(0);
+                    n->Motion.AccLimit = 40000;
+                }
+                cout << "\nTorque mode tightening completed" << endl;
                 break;
             case 's':   // Set zero
                 for (int n = 0; n < nodeList.size(); n++){
@@ -105,7 +114,7 @@ int main()
                     cin >> cmd;
                     if('/' < cmd && cmd < nodeList.size()+48){
                         int id = cmd - 48;
-                        int sCount = 50000;
+                        int sCount = 10000;
                         cout << "Motor "<< cmd <<" selected.\n";
                         do{
                             cmd = getch();
@@ -270,6 +279,7 @@ int main()
                 }
             }
         }
+        cout << "Quiting manual control...\n";
     }
 
     // Test torque control frequency
@@ -304,7 +314,7 @@ int main()
         Sleep(2000);
     }*/
     
-    Sleep(4000); // wait a little more before disabling the nodes
+    Sleep(3000); // wait a little more before disabling the nodes
     cout << "Disabling motors and closing ports" << endl;
     for(int i = 0; i < nodeList.size(); i++){ //Disable Nodes
         myPort.Nodes(i).EnableReq(false);
@@ -453,15 +463,20 @@ void SendMotorCmd(int n){
 
 void SendMotorTrq(int n){
     //float tolerance = 0.1;
-    float Kp = 100;
+    // float Kp = 1000;
 
-    nodeList[n]->Motion.MoveWentDone();
+    // nodeList[n]->Motion.MoveWentDone();
     nodeList[n]->Motion.TrqCommanded.Refresh();
     float currentTorque = nodeList[n]->Motion.TrqCommanded.Value();
-    int moveSize = Kp * (targetTorque - currentTorque);
-    nodeList[n]->Motion.MovePosnStart(moveSize, false, true);
-    nodeList[n]->Motion.Adv.TriggerGroup(1);
-    printf("Node[%d], current torque: \t%6.0f \n", n, currentTorque);
+    // int moveSize = Kp * (targetTorque - currentTorque);
+    // nodeList[n]->Motion.MovePosnStart(moveSize, false, true);
+    // nodeList[n]->Motion.Adv.TriggerGroup(1);
+
+    if(currentTorque > targetTorque){ nodeList[n]->Motion.MoveVelStart(-300); }
+    else if (currentTorque < targetTorque - 3){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
+    else{ nodeList[n]->Motion.MoveVelStart(0);}
+    // printf("Node[%d], current torque: %f\tCommmanded step: %d\n", n, currentTorque, moveSize);
+    printf("Node[%d], current torque: %f\n", n, currentTorque);
 
     // any safety measures for extremely large torques?
 }
