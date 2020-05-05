@@ -486,21 +486,14 @@ void SendMotorGrp(bool IsTorque){
     IPort &myPort = myMgr->Ports(0);
     void (*func)(int){ SendMotorCmd };
     if(IsTorque){ func = SendMotorTrq; }
-    // thread th8((*func),7);
-    // thread th7((*func),6);
-    // thread th6((*func),5);
-    // thread th5((*func),4);
-    // thread th4((*func),3);
-    // thread th3((*func),2);
-    thread th2((*func),1);
-    thread th1((*func),0);
-    // th8.join();
-    // th7.join();
-    // th6.join();
-    // th5.join();
-    // th4.join();
-    // th3.join();
-    th2.join();
-    th1.join();
+
+    const int nodeNum = 4;
+    thread nodeThreads[nodeNum];
+    for(int i = 0; i < nodeNum; i++){
+        nodeThreads[i] = thread((*func), i);
+    }
+    for(int i = 0; i < nodeNum; i++){
+        nodeThreads[i].join();
+    }
     myPort.Adv.TriggerMovesInGroup(1);
 }
