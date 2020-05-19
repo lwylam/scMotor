@@ -17,7 +17,10 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "msvc-x64",
             "compilerArgs": [],
-            "forcedInclude": []
+            "forcedInclude": [],
+            "browse": {
+                "path": ["${workspaceFolder}"]
+            }
         }
     ],
     "version": 4

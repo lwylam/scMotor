@@ -22,6 +22,7 @@ void SolveCubicCoef(int loop_i);
 void SendMotorGrp(bool IsTorque = false);
 int SolveParaBlend(int loop_i, bool showAttention = false);
 int32_t ToMotorCmd(int motorID, double length);
+void TrjHome();
 
 vector<string> comHubPorts;
 vector<INode*> nodeList; // create a list for each node
@@ -31,10 +32,10 @@ unsigned int portCount;
 const double step = 0.0005; // in meters, for manual control
 const int targetTorque = -5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
-const double home[] = {2, 0.5, 2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
-double offset[4] = {6.43438, 7.67390, 6.06174, 4.48486}; // L0, from "zero position"
-double in1[6] = {2, 0.5, 2, 0, 0, 0};
-double out1[4] = {6.43438, 7.6739, 6.06174, 4.48486}; // assume there are 4 motors
+const double home[] = {2, 2, 1, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double offset[8] = {2.92796, 3.22244, 2.92991, 3.22185, 2.92926, 3.21857, 2.92808, 3.21957}; // L0, from "zero position"
+double in1[6] = {2, 2, 1, 0, 0, 0};
+double out1[8] = {2.92796, 3.22244, 2.92991, 3.22185, 2.92926, 3.21857, 2.92808, 3.21957}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
 int main()
@@ -77,7 +78,7 @@ int main()
                         if(n->Motion.TrqCommanded.Value() > targetTorque) { break; }
                         stabilized = true;
                     }
-                }
+                } 
                 for(INode* n : nodeList){
                     n->Motion.TrqCommanded.Refresh();
                     cout << n->Motion.TrqCommanded.Value() << "\t";
@@ -194,7 +195,7 @@ int main()
                 cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
                 // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
                 compile_lengths(in1, out1);
-                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
                 
                 auto end = chrono::steady_clock::now();
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
@@ -244,15 +245,16 @@ int main()
                     break;
                 case 'H':
                 case 'h':
-                    cout << "Homing...\n";
+                    cout << "Homing...\n"; 
+                    TrjHome();
                     copy(begin(home), end(home), begin(in1));
                     break;
             }
             cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            if(0<=in1[0] && in1[0]<=5 && 0<=in1[2] && in1[2]<=5){ //TODO: define workspace bounds somewhere else
+            if(0<=in1[0] && in1[0]<=4 && 0<=in1[1] && in1[1]<=4 && 0<=in1[2] && in1[2]<=2.3){ //TODO: define workspace bounds somewhere else
                 compile_lengths(in1, out1);
-                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
-
+                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
+                
                 SendMotorGrp();
                 
                 // should we wait for a while here??
@@ -314,7 +316,18 @@ int main()
         Sleep(2000);
     }*/
     
-    Sleep(3000); // wait a little more before disabling the nodes
+    Sleep(1000); // wait a little more before disabling the nodes
+
+    // Saving last position before quiting programme
+    cout << "Saving last position...\n";
+    ofstream myfile;
+    myfile.open ("data.txt");
+    myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
+    myfile << out1[0] << ", " << out1[1] << ", " << out1[2] << ", " << out1[3] <<  out1[4] << ", " << out1[5] << ", " << out1[6] << ", " << out1[7] <<  endl;
+    myfile.close();
+    // Homing before shut down
+    TrjHome();
+
     cout << "Disabling motors and closing ports" << endl;
     for(int i = 0; i < nodeList.size(); i++){ //Disable Nodes
         myPort.Nodes(i).EnableReq(false);
@@ -323,7 +336,7 @@ int main()
     myMgr->PortsClose(); // Close down the ports
     
     cout << "\n" << "Done at " << myMgr->TimeStampMsec() << endl;
-    return 0;
+    return 0;   
 }
 
 int CheckMotorNetwork() {
@@ -344,6 +357,8 @@ int CheckMotorNetwork() {
     myMgr->PortsOpen(portCount);
     for (int i = 0; i < portCount; i++) { // check no. of nodes in each ports
         IPort &myPort = myMgr->Ports(i);
+        myPort.BrakeControl.BrakeSetting(0, BRAKE_AUTOCONTROL); // do we need this?
+        myPort.BrakeControl.BrakeSetting(1, BRAKE_AUTOCONTROL);
         printf(" Port[%d]: state=%d, nodes=%d\n", myPort.NetNumber(), myPort.OpenState(), myPort.NodeCount());
     
         for (int iNode = 0; iNode < myPort.NodeCount(); iNode++) {
@@ -405,7 +420,7 @@ void SolveCubicCoef(int loop_i){
 
 int SolveParaBlend(int loop_i, bool showAttention){
     // make them accessable from outside??
-    float vMax[6] = {.01, .001, .01, 0.8, 0.8, 0.8}; // Define the maximum velocity for each DoF
+    float vMax[6] = {.01, .01, .01, 0.8, 0.8, 0.8}; // Define the maximum velocity for each DoF
     float aMax[6] = {.01, .01, .01, .01, .01, .01}; // Define the maximum acceleration for each DoF
     double sQ[6], Q[6], o[6];
     double dura = points[loop_i][6];
@@ -455,8 +470,8 @@ void SendMotorCmd(int n){
     nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
     timeout.push_back(nodeList[n]->Motion.MovePosnDurationMsec(step, true)); // absolute position
     nodeList[n]->Motion.Adv.TriggerGroup(1);
-    cout << "Node " << n << " " << step << "\tTorque: "<< (double)nodeList[n]->Motion.TrqMeasured;
-    cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
+    cout << "Node " << n << " " << step << "\tTorque: "<< (double)nodeList[n]->Motion.TrqMeasured << endl;
+    // cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
 
     // should we put some saftely factor on tracking position error? set a flag
 }
@@ -481,13 +496,13 @@ void SendMotorTrq(int n){
     // any safety measures for extremely large torques?
 }
 
-void SendMotorGrp(bool IsTorque){
+void SendMotorGrp(bool IsTorque){ // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
+    const int nodeNum = 8;
     SysManager* myMgr = SysManager::Instance();
     IPort &myPort = myMgr->Ports(0);
     void (*func)(int){ SendMotorCmd };
     if(IsTorque){ func = SendMotorTrq; }
 
-    const int nodeNum = 4;
     thread nodeThreads[nodeNum];
     for(int i = 0; i < nodeNum; i++){
         nodeThreads[i] = thread((*func), i);
@@ -496,4 +511,44 @@ void SendMotorGrp(bool IsTorque){
         nodeThreads[i].join();
     }
     myPort.Adv.TriggerMovesInGroup(1);
+}
+
+void TrjHome(){
+    double velLmt = 0.8; // unit in meters
+    double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt;
+    double t = 0;
+
+    for(int i = 0; i < 6; i++){
+        // solve coefficients of equations for cubic
+        a[i] = in1[i];
+        b[i] = 3 / (dura * dura) * (home[i] - in1[i]);
+        c[i] = -2 / (dura * dura * dura) * (home[i] - in1[i]);
+    }
+    while (t <= dura){
+        auto start = chrono::steady_clock::now();
+        long dur = 0;
+        
+        // CUBIC equation
+        for (int j = 0; j < 6; j++){
+            in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
+        }
+        cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+        compile_lengths(in1, out1);
+        cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+        SendMotorGrp();
+
+        auto end = chrono::steady_clock::now();
+        dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+        cout << " Before sleep: " << dur << endl;
+        
+        double dif = MILLIS_TO_NEXT_FRAME - dur;
+        if(dif > 0) { Sleep(dif); }
+        // Sleep(MILLIS_TO_NEXT_FRAME);
+
+        end = chrono::steady_clock::now();
+        dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+        cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
+        t += MILLIS_TO_NEXT_FRAME;
+    }
+    cout << "Homing with trajectory completed\n";
 }

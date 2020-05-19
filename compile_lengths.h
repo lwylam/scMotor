@@ -20,7 +20,7 @@
 
 /* Function Declarations */
 // extern void compile_lengths(const double in1[6], double out1[4]);
-void compile_lengths(double in1[6], double out1[4]);
+void compile_lengths(double in1[6], double out1[8]);
 
 #endif
 
