@@ -23,13 +23,15 @@ void SendMotorGrp(bool IsTorque = false);
 int SolveParaBlend(int loop_i, bool showAttention = false);
 int32_t ToMotorCmd(int motorID, double length);
 void TrjHome();
+bool CheckLimits();
 
 vector<string> comHubPorts;
 vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
-vector<double> timeout;
+vector<double> timeout, spcLimit;
 unsigned int portCount;
-const double step = 0.0005; // in meters, for manual control
+const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
+const double step = 0.005; // in meters, for manual control
 const int targetTorque = -5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
 const double home[] = {2, 2, 1, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
@@ -139,7 +141,7 @@ int main()
         }
     } while(cmd != 'n'); 
     
-    cout << "Choose from menu for cable robot motion:\nr - Read from \"input.csv\" file\nm - Manual input using w,a,s,d\nany other key - Disable motors and exit programme" << endl;
+    cout << "Choose from menu for cable robot motion:\nr - Read from \"input.csv\" file\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
     cin >> cmd;
     if (cmd == 'r' || cmd =='R'){
         // Read input file for traj-gen
@@ -229,19 +231,27 @@ int main()
             switch(cmd){
                 case 'W':
                 case 'w':
-                    in1[0] += step;
-                    break;
-                case 'A':
-                case 'a':
-                    in1[2] -= step;
+                    in1[1] += step;
                     break;
                 case 'S':
                 case 's':
+                    in1[1] -= step;
+                    break;
+                case 'A':
+                case 'a':
                     in1[0] -= step;
                     break;
                 case 'D':
                 case 'd':
+                    in1[0] += step;
+                    break;
+                case 'R':
+                case 'r':
                     in1[2] += step;
+                    break;
+                case 'F':
+                case 'f':
+                    in1[2] -= step;
                     break;
                 case 'H':
                 case 'h':
@@ -251,7 +261,7 @@ int main()
                     break;
             }
             cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            if(0<=in1[0] && in1[0]<=4 && 0<=in1[1] && in1[1]<=4 && 0<=in1[2] && in1[2]<=2.3){ //TODO: define workspace bounds somewhere else
+            if(CheckLimits()){
                 compile_lengths(in1, out1);
                 cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
                 
@@ -264,19 +274,27 @@ int main()
                 switch(cmd){
                     case 'W':
                     case 'w':
-                        in1[0] -= step;
-                        break;
-                    case 'A':
-                    case 'a':
-                        in1[2] += step;
+                        in1[1] -= step;
                         break;
                     case 'S':
                     case 's':
+                        in1[1] += step;
+                        break;
+                    case 'A':
+                    case 'a':
                         in1[0] += step;
                         break;
                     case 'D':
                     case 'd':
+                        in1[0] -= step;
+                        break;
+                    case 'R':
+                    case 'r':
                         in1[2] -= step;
+                        break;
+                    case 'F':
+                    case 'f':
+                        in1[2] += step;
                         break;
                 }
             }
@@ -496,8 +514,7 @@ void SendMotorTrq(int n){
     // any safety measures for extremely large torques?
 }
 
-void SendMotorGrp(bool IsTorque){ // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
-    const int nodeNum = 8;
+void SendMotorGrp(bool IsTorque){
     SysManager* myMgr = SysManager::Instance();
     IPort &myPort = myMgr->Ports(0);
     void (*func)(int){ SendMotorCmd };
@@ -551,4 +568,21 @@ void TrjHome(){
         t += MILLIS_TO_NEXT_FRAME;
     }
     cout << "Homing with trajectory completed\n";
+}
+
+bool CheckLimits(){
+    if(spcLimit.empty()){
+        ifstream file ("limit.csv"); // Read limit file
+        string temp;
+        if(file.is_open()){
+            while (file >> temp){
+                spcLimit.push_back(stod(temp)); // convert string to double stod()
+            }
+            cout << "Completed reading external limit file" << endl;
+        }
+    }
+    for (int i = 0; i < 3; i++){
+        if(spcLimit[i*2]>in1[i] || in1[i]>spcLimit[i*2+1]){ return false; }
+    }
+    return true;
 }
