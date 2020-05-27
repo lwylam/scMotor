@@ -10,6 +10,7 @@
 #include <conio.h>
 #include <windows.h>
 #include "compile_lengths.h"
+#include "pose_to_length.h"
 #include "Dependencies\sFoundation20\inc\pubSysCls.h"
 
 using namespace std;
@@ -32,12 +33,12 @@ vector<double> timeout, spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
 const double step = 0.005; // in meters, for manual control
-const int targetTorque = -5; // in percentage, -ve for tension?
+const int targetTorque = -3; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
-const double home[] = {2, 2, 1, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
-double offset[8] = {2.92796, 3.22244, 2.92991, 3.22185, 2.92926, 3.21857, 2.92808, 3.21957}; // L0, from "zero position"
-double in1[6] = {2, 2, 1, 0, 0, 0};
-double out1[8] = {2.92796, 3.22244, 2.92991, 3.22185, 2.92926, 3.21857, 2.92808, 3.21957}; // assume there are 8 motors
+const double home[] = {1.485, -1.548, -0.403, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double offset[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // L0, from "zero position", will be updated by "set home" command
+double in1[6] = {1.485, -1.548, -0.403, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double out1[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
 int main()
@@ -94,7 +95,7 @@ int main()
                     nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
                 }
                 copy(begin(home), end(home), begin(in1));
-                compile_lengths(in1, offset);
+                pose_to_length(in1, offset); // save offset values according to home pose
                 cout << "Setting zero completed" << endl;
                 break;
             case 'h':   // Homing
@@ -145,7 +146,7 @@ int main()
     cin >> cmd;
     if (cmd == 'r' || cmd =='R'){
         // Read input file for traj-gen
-        ifstream file ("input.csv");  // TODO: invalid read?
+        ifstream file ("input.csv");
         vector<double> row;
         string line, word, temp;
         if(file.is_open()){
@@ -196,7 +197,7 @@ int main()
                 // get absolute cable lengths in meters
                 cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
                 // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
-                compile_lengths(in1, out1);
+                pose_to_length(in1, out1);
                 cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
                 
                 auto end = chrono::steady_clock::now();
@@ -262,7 +263,7 @@ int main()
             }
             cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
             if(CheckLimits()){
-                compile_lengths(in1, out1);
+                pose_to_length(in1, out1);
                 cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
                 
                 SendMotorGrp();
@@ -488,7 +489,8 @@ void SendMotorCmd(int n){
     nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
     timeout.push_back(nodeList[n]->Motion.MovePosnDurationMsec(step, true)); // absolute position
     nodeList[n]->Motion.Adv.TriggerGroup(1);
-    cout << "Node " << n << " " << step << "\tTorque: "<< (double)nodeList[n]->Motion.TrqMeasured << endl;
+    double trqMeas = nodeList[n]->Motion.TrqMeasured;
+    cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
     // cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
 
     // should we put some saftely factor on tracking position error? set a flag
@@ -530,10 +532,11 @@ void SendMotorGrp(bool IsTorque){
     myPort.Adv.TriggerMovesInGroup(1);
 }
 
-void TrjHome(){
-    double velLmt = 0.8; // unit in meters
+void TrjHome(){// !!! Define the task space velocity limit for homing !!!
+    double velLmt = 0.6; // unit in meters
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt;
     double t = 0;
+    cout << "Expected homing duration: " << dura <<"ms\n";
 
     for(int i = 0; i < 6; i++){
         // solve coefficients of equations for cubic
@@ -550,7 +553,7 @@ void TrjHome(){
             in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
         }
         cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-        compile_lengths(in1, out1);
+        pose_to_length(in1, out1);
         cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
         SendMotorGrp();
 

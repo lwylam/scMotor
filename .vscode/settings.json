@@ -3,6 +3,9 @@
     "files.associations": {
         "iosfwd": "cpp",
         "iostream": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "xstring": "cpp",
+        "dense": "cpp",
+        "random": "cpp"
     }
 }
