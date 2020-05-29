@@ -32,10 +32,10 @@ vector<vector<double>> points;
 vector<double> timeout, spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
-const double step = 0.005; // in meters, for manual control
-const int targetTorque = -3; // in percentage, -ve for tension?
+const double step = 0.05; // in meters, for manual control
+const float targetTorque[8] = {-2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5}; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
-const double home[] = {1.485, -1.548, -0.403, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double home[] = {1.449, -1.606, 0.540, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // L0, from "zero position", will be updated by "set home" command
 double in1[6] = {1.485, -1.548, -0.403, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
 double out1[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // assume there are 8 motors
@@ -59,7 +59,7 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nn - Move on to Next step" << endl;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update home position from external file\nn - Move on to Next step" << endl;
     char cmd;
     do {
         bool allDone = false, stabilized = false;
@@ -77,8 +77,8 @@ int main()
                     //     }
                     // }
                     Sleep(50);
-                    for (INode* n : nodeList) {
-                        if(n->Motion.TrqCommanded.Value() > targetTorque) { break; }
+                   for (int n = 0; n < nodeList.size(); n++){
+                        if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque[n]) { break; }
                         stabilized = true;
                     }
                 } 
@@ -94,7 +94,7 @@ int main()
                 for (int n = 0; n < nodeList.size(); n++){
                     nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
                 }
-                copy(begin(home), end(home), begin(in1));
+                copy(begin(home), end(home), begin(in1)); // copy home array into input array
                 pose_to_length(in1, offset); // save offset values according to home pose
                 cout << "Setting zero completed" << endl;
                 break;
@@ -118,7 +118,7 @@ int main()
                     cin >> cmd;
                     if('/' < cmd && cmd < nodeList.size()+48){
                         int id = cmd - 48;
-                        int sCount = 10000;
+                        int sCount = ToMotorCmd(-1, step);
                         cout << "Motor "<< cmd <<" selected.\n";
                         do{
                             cmd = getch();
@@ -137,7 +137,19 @@ int main()
                 }
                 cout << "Manual adjustment terminated" << endl;
                 break;
-            default:
+            case 'u':
+                ifstream file ("home.csv");
+                string temp;
+                int count = 0;
+                if(file.is_open()){
+                    try{
+                        while (file >> temp){
+                            home[count++] = stod(temp); // convert string to double stod()
+                        }
+                        cout << "Completed updating from external home file" << endl;
+                    }
+                    catch(int e){ cout << "Check if home.csv matches the home input no." << endl; }
+                }
                 break;
         }
     } while(cmd != 'n'); 
@@ -170,7 +182,7 @@ int main()
             double t = 0;
             // trajectory generation and points splitting
             // SolveCubicCoef(i);
-            if(SolveParaBlend(i) < 0){ return -3; }
+            if(SolveParaBlend(i, true) < 0){ return -3; }
             cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
                 
             while (t <= points[i][6]){
@@ -188,7 +200,7 @@ int main()
                         in1[j] = a[j] + b[j] * t * t;
                     }
                     else if(t <= points[i][6]-tb[j]){
-                        in1[j] = c[j] + d[j];
+                        in1[j] = c[j] + d[j] * t;
                     }
                     else{
                         in1[j] = e[j] + f[j] * t + g[j] * t * t;
@@ -198,7 +210,7 @@ int main()
                 cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
                 // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
                 pose_to_length(in1, out1);
-                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
+                cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
                 
                 auto end = chrono::steady_clock::now();
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
@@ -455,7 +467,7 @@ int SolveParaBlend(int loop_i, bool showAttention){
         else if (tb[i] > dura / 2){
             if (showAttention){ cout << "ATTENTION: Trajectory for DoF " << i << " will be in cubic form.\n"; }
             tb[i] = dura / 2;
-            vMax[i] = (Q[i] - sQ[i]) / dura;
+            vMax[i] = 2 * (Q[i] - sQ[i]) / dura;
         }
         o[i] = vMax[i] / 2 / tb[i];
         if(abs(o[i]*2) > aMax[i]){
@@ -478,7 +490,8 @@ int SolveParaBlend(int loop_i, bool showAttention){
 }
 
 int32_t ToMotorCmd(int motorID, double length){
-    double scale = 814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05) 
+    double scale = 820632.006; //814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05) 
+    if (motorID == -1) { return length * scale; }
     return (length - offset[motorID]) * scale;
 }
 
@@ -507,9 +520,9 @@ void SendMotorTrq(int n){
     // nodeList[n]->Motion.MovePosnStart(moveSize, false, true);
     // nodeList[n]->Motion.Adv.TriggerGroup(1);
 
-    if(currentTorque > targetTorque){ nodeList[n]->Motion.MoveVelStart(-300); }
-    else if (currentTorque < targetTorque - 3){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
-    else{ nodeList[n]->Motion.MoveVelStart(0);}
+    if(currentTorque > targetTorque[n]){ nodeList[n]->Motion.MoveVelStart(-300); }
+    else if (currentTorque < targetTorque[n] - 3){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
+    else{ nodeList[n]->Motion.MoveVelStart(-10);}
     // printf("Node[%d], current torque: %f\tCommmanded step: %d\n", n, currentTorque, moveSize);
     printf("Node[%d], current torque: %f\n", n, currentTorque);
 
@@ -533,7 +546,7 @@ void SendMotorGrp(bool IsTorque){
 }
 
 void TrjHome(){// !!! Define the task space velocity limit for homing !!!
-    double velLmt = 0.6; // unit in meters
+    double velLmt = 0.001; // unit in meters per sec
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt;
     double t = 0;
     cout << "Expected homing duration: " << dura <<"ms\n";
