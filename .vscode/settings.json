@@ -6,6 +6,8 @@
         "thread": "cpp",
         "xstring": "cpp",
         "dense": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "cstdlib": "cpp",
+        "chrono": "cpp"
     }
 }

@@ -34,11 +34,11 @@ unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
 const double step = 0.05; // in meters, for manual control
 const float targetTorque[8] = {-2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5}; // in percentage, -ve for tension?
-const int MILLIS_TO_NEXT_FRAME = 20; // note the basic calculation time is abt 16ms
+const int MILLIS_TO_NEXT_FRAME = 50; // note the basic calculation time is abt 16ms
 double home[] = {1.449, -1.606, 0.540, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
-double offset[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.485, -1.548, -0.403, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
-double out1[8] = {3.22368, 2.52031, 2.84942, 2.01121, 2.78539, 1.90926, 3.16067, 2.4366}; // assume there are 8 motors
+double offset[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // L0, from "zero position", will be updated by "set home" command
+double in1[6] = {1.449, -1.606, 0.540, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double out1[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
 int main()
@@ -224,7 +224,7 @@ int main()
                 dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                 cout << " Before sleep: " << dur << endl;
                 
-                double dif = MILLIS_TO_NEXT_FRAME - dur;
+                double dif = MILLIS_TO_NEXT_FRAME - dur - 1;
                 if(dif > 0) { Sleep(dif);}
                 // Sleep(MILLIS_TO_NEXT_FRAME);
 
@@ -451,14 +451,16 @@ void SolveCubicCoef(int loop_i){
 
 int SolveParaBlend(int loop_i, bool showAttention){
     // make them accessable from outside??
-    float vMax[6] = {.01, .01, .01, 0.8, 0.8, 0.8}; // Define the maximum velocity for each DoF
-    float aMax[6] = {.01, .01, .01, .01, .01, .01}; // Define the maximum acceleration for each DoF
+    float vMax[6] = {.3, .3, .3, 0.8, 0.8, 0.8}; // m/s, define the maximum velocity for each DoF
+    float aMax[6] = {20, 20, 20, 0.8, 0.8, 0.8}; // m/s^2, define the maximum acceleration for each DoF
     double sQ[6], Q[6], o[6];
     double dura = points[loop_i][6];
     
     for(int i = 0; i < 6; i++){
         sQ[i] = loop_i == 0 ? home[i] : points[loop_i - 1][i];
         Q[i] = points[loop_i][i];
+        vMax[i] /= 1000; // change the velocity unit to meter per ms
+        aMax[i] /= 1000000; // change the unit to meter per ms square
         tb[i] = dura - (Q[i] - sQ[i]) / vMax[i];
         if(tb[i] < 0) {
             cout << "WARNING: Intended trajectory exceeds velocity limit in DoF "<< i << ".\n";
@@ -471,7 +473,7 @@ int SolveParaBlend(int loop_i, bool showAttention){
         }
         o[i] = vMax[i] / 2 / tb[i];
         if(abs(o[i]*2) > aMax[i]){
-            cout << "WARNING: Intended trajectory exceeds acceleration limit in DoF "<< i << ".\n";
+            cout << "WARNING: Intended trajectory acceleration <" << abs(o[i]*2) << "> exceeds limit in DoF "<< i << ".\n";
             return -1;
         }
         
@@ -546,8 +548,8 @@ void SendMotorGrp(bool IsTorque){
 }
 
 void TrjHome(){// !!! Define the task space velocity limit for homing !!!
-    double velLmt = 0.001; // unit in meters per sec
-    double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt;
+    double velLmt = 0.01; // unit in meters per sec
+    double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt*1000; // *1000 to change unit to ms
     double t = 0;
     cout << "Expected homing duration: " << dura <<"ms\n";
 
