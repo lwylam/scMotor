@@ -32,12 +32,12 @@ vector<vector<double>> points;
 vector<double> timeout, spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
-const double step = 0.05; // in meters, for manual control
+const double step = 0.02; // in meters, for manual control
 const float targetTorque[8] = {-2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5}; // in percentage, -ve for tension?
-const int MILLIS_TO_NEXT_FRAME = 50; // note the basic calculation time is abt 16ms
-double home[] = {1.449, -1.606, 0.540, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
+double home[6] = {1.741, -1.149, 0.575, -0.153589, -0.003839724, -0.06928957}; // home posisiton //TODO: make a txt file for this?
 double offset[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.449, -1.606, 0.540, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double in1[6] = {1.741, -1.149, 0.575, -0.153589, -0.003839724, -0.06928957}; //{2, 2, 1, 0, 0, 0};
 double out1[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -118,7 +118,7 @@ int main()
                     cin >> cmd;
                     if('/' < cmd && cmd < nodeList.size()+48){
                         int id = cmd - 48;
-                        int sCount = ToMotorCmd(-1, step);
+                        int sCount = ToMotorCmd(-1, step) / 5;
                         cout << "Motor "<< cmd <<" selected.\n";
                         do{
                             cmd = getch();
@@ -154,166 +154,175 @@ int main()
         }
     } while(cmd != 'n'); 
     
-    cout << "Choose from menu for cable robot motion:\nr - Read from \"input.csv\" file\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
-    cin >> cmd;
-    if (cmd == 'r' || cmd =='R'){
-        // Read input file for traj-gen
+    cout << "Choose from menu for cable robot motion:\nt - Read from \"input.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
+    do {
+        cin >> cmd;
         ifstream file ("input.csv");
         vector<double> row;
         string line, word, temp;
-        if(file.is_open()){
-            while (getline(file, line)){
-                row.clear();
-                stringstream s(line);
-                while (s >> word){
-                    row.push_back(stod(word)); // convert string to double stod()
-                }
-                points.push_back(row);
-            }
-            cout << "Completed reading external input file" << endl;
-        }
-        else{
-            cout << "Failed to read input file. Exit programme." << endl;
-            return -1;
-        }
-
-        // Go through the given points
-        for (int i = 0; i < points.size(); i++){
-            double t = 0;
-            // trajectory generation and points splitting
-            // SolveCubicCoef(i);
-            if(SolveParaBlend(i, true) < 0){ return -3; }
-            cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
-                
-            while (t <= points[i][6]){
-                auto start = chrono::steady_clock::now();
-                long dur = 0;
-                
-                // per time step pose
-                // CUBIC equation
-                // for (int j = 0; j < 6; j++){
-                //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
-                // }
-                // PARABOLIC BLEND equation
-                for (int j = 0; j < 6; j++){
-                    if (t <= tb[j]){
-                        in1[j] = a[j] + b[j] * t * t;
+        switch (cmd){
+            case 't':   // Read traj file
+            case 'T':
+                // Read input file for traj-gen
+                points.clear();
+                if(file.is_open()){
+                    while (getline(file, line)){
+                        row.clear();
+                        stringstream s(line);
+                        while (s >> word){
+                            row.push_back(stod(word)); // convert string to double stod()
+                        }
+                        points.push_back(row);
                     }
-                    else if(t <= points[i][6]-tb[j]){
-                        in1[j] = c[j] + d[j] * t;
+                    cout << "Completed reading external input file" << endl;
+                }
+                else{
+                    cout << "Failed to read input file. Exit programme." << endl;
+                    return -1;
+                }
+
+                // Go through the given points
+                for (int i = 0; i < points.size(); i++) {
+                    double t = 0;
+                    // trajectory generation and points splitting
+                    // SolveCubicCoef(i);
+                    if(SolveParaBlend(i, true) < 0) { 
+                        return -3; 
+                    }
+                    cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
+                    
+                    while (t <= points[i][6]){
+                        auto start = chrono::steady_clock::now();
+                        long dur = 0;
+                        
+                        // per time step pose
+                        // CUBIC equation
+                        // for (int j = 0; j < 6; j++){
+                        //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
+                        // }
+                        // PARABOLIC BLEND equation
+                        for (int j = 0; j < 6; j++){
+                            if (t <= tb[j]){
+                                in1[j] = a[j] + b[j] * t * t;
+                            }
+                            else if(t <= points[i][6]-tb[j]){
+                                in1[j] = c[j] + d[j] * t;
+                            }
+                            else{
+                                in1[j] = e[j] + f[j] * t + g[j] * t * t;
+                            }
+                        }
+                        // get absolute cable lengths in meters
+                        cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+                        // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
+                        pose_to_length(in1, out1);
+                        cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
+                        
+                        // auto end = chrono::steady_clock::now();
+                        // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                        // cout << "Step to command time: "<< dur << "\t";
+
+                        SendMotorGrp();
+
+                        // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
+                        // cout << "Estimated time: " << t_max;
+                        auto end = chrono::steady_clock::now();
+                        dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                        // cout << "Before sleep: " << dur << endl;
+                        
+                        double dif = MILLIS_TO_NEXT_FRAME - dur - 1;
+                        if(dif > 0) { Sleep(dif);}
+                        // Sleep(MILLIS_TO_NEXT_FRAME);
+
+                        // end = chrono::steady_clock::now();
+                        // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+                        // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
+                        timeout.clear();
+                        t += MILLIS_TO_NEXT_FRAME;
+                    }
+                    cout << "----------Completed point " << i <<"----------" << endl;
+                }
+                break;
+            case 'm':   // Manual wasdrf
+            case 'M':
+                cout << "Press 'q' to quit manual input anytime.\t'h' for Homing\n";
+                while(cmd != 'q' && cmd != 'Q'){
+                    cmd = getch();
+                    switch(cmd){
+                        case 'W':
+                        case 'w':
+                            in1[1] += step;
+                            break;
+                        case 'S':
+                        case 's':
+                            in1[1] -= step;
+                            break;
+                        case 'A':
+                        case 'a':
+                            in1[0] -= step;
+                            break;
+                        case 'D':
+                        case 'd':
+                            in1[0] += step;
+                            break;
+                        case 'R':
+                        case 'r':
+                            in1[2] += step;
+                            break;
+                        case 'F':
+                        case 'f':
+                            in1[2] -= step;
+                            break;
+                        case 'H':
+                        case 'h':
+                            cout << "Homing...\n"; 
+                            TrjHome();
+                            copy(begin(home), end(home), begin(in1));
+                            break;
+                    }
+                    cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+                    if(CheckLimits()){
+                        pose_to_length(in1, out1);
+                        cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
+                        
+                        SendMotorGrp();
+                        
+                        // should we wait for a while here??
                     }
                     else{
-                        in1[j] = e[j] + f[j] * t + g[j] * t * t;
+                        cout << "WARNING: Intended position out of bound!\n";
+                        switch(cmd){
+                            case 'W':
+                            case 'w':
+                                in1[1] -= step;
+                                break;
+                            case 'S':
+                            case 's':
+                                in1[1] += step;
+                                break;
+                            case 'A':
+                            case 'a':
+                                in1[0] += step;
+                                break;
+                            case 'D':
+                            case 'd':
+                                in1[0] -= step;
+                                break;
+                            case 'R':
+                            case 'r':
+                                in1[2] -= step;
+                                break;
+                            case 'F':
+                            case 'f':
+                                in1[2] += step;
+                                break;
+                        }
                     }
                 }
-                // get absolute cable lengths in meters
-                cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-                // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
-                pose_to_length(in1, out1);
-                cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
-                
-                auto end = chrono::steady_clock::now();
-                dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                cout << "Step to command time: "<< dur << "\t";
-
-                SendMotorGrp();
-
-                // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
-                // cout << "Estimated time: " << t_max;
-                end = chrono::steady_clock::now();
-                dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                cout << " Before sleep: " << dur << endl;
-                
-                double dif = MILLIS_TO_NEXT_FRAME - dur - 1;
-                if(dif > 0) { Sleep(dif);}
-                // Sleep(MILLIS_TO_NEXT_FRAME);
-
-                end = chrono::steady_clock::now();
-                dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
-                timeout.clear();
-                t += MILLIS_TO_NEXT_FRAME;
-            }
-            cout << "----------Completed point " << i <<"----------" << endl;
+                cout << "Quiting manual control...\n";
+                break;
         }
-    }
-    else if (cmd == 'm' || cmd =='M'){
-        cout << "Press 'q' to quit manual input and exit programme anytime.\t'h' for Homing\n";
-        while(cmd != 'q' && cmd != 'Q'){
-            cmd = getch();
-            switch(cmd){
-                case 'W':
-                case 'w':
-                    in1[1] += step;
-                    break;
-                case 'S':
-                case 's':
-                    in1[1] -= step;
-                    break;
-                case 'A':
-                case 'a':
-                    in1[0] -= step;
-                    break;
-                case 'D':
-                case 'd':
-                    in1[0] += step;
-                    break;
-                case 'R':
-                case 'r':
-                    in1[2] += step;
-                    break;
-                case 'F':
-                case 'f':
-                    in1[2] -= step;
-                    break;
-                case 'H':
-                case 'h':
-                    cout << "Homing...\n"; 
-                    TrjHome();
-                    copy(begin(home), end(home), begin(in1));
-                    break;
-            }
-            cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            if(CheckLimits()){
-                pose_to_length(in1, out1);
-                cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << " " <<  out1[4] << " " << out1[5] << " " << out1[6] << " " << out1[7] << endl;
-                
-                SendMotorGrp();
-                
-                // should we wait for a while here??
-            }
-            else{
-                cout << "WARNING: Intended position out of bound!\n";
-                switch(cmd){
-                    case 'W':
-                    case 'w':
-                        in1[1] -= step;
-                        break;
-                    case 'S':
-                    case 's':
-                        in1[1] += step;
-                        break;
-                    case 'A':
-                    case 'a':
-                        in1[0] += step;
-                        break;
-                    case 'D':
-                    case 'd':
-                        in1[0] -= step;
-                        break;
-                    case 'R':
-                    case 'r':
-                        in1[2] -= step;
-                        break;
-                    case 'F':
-                    case 'f':
-                        in1[2] += step;
-                        break;
-                }
-            }
-        }
-        cout << "Quiting manual control...\n";
-    }
+    } while(cmd != 'n'); 
 
     // Test torque control frequency
     /*for (int n = 0; n < nodeList.size(); n++){
@@ -451,13 +460,13 @@ void SolveCubicCoef(int loop_i){
 
 int SolveParaBlend(int loop_i, bool showAttention){
     // make them accessable from outside??
-    float vMax[6] = {.3, .3, .3, 0.8, 0.8, 0.8}; // m/s, define the maximum velocity for each DoF
-    float aMax[6] = {20, 20, 20, 0.8, 0.8, 0.8}; // m/s^2, define the maximum acceleration for each DoF
+    float vMax[6] = {.4, .4, .4, 0.8, 0.8, 0.8}; // m/s, define the maximum velocity for each DoF
+    float aMax[6] = {20, 20, 20, 10, 10, 10}; // m/s^2, define the maximum acceleration for each DoF
     double sQ[6], Q[6], o[6];
     double dura = points[loop_i][6];
     
     for(int i = 0; i < 6; i++){
-        sQ[i] = loop_i == 0 ? home[i] : points[loop_i - 1][i];
+        sQ[i] = in1[i];
         Q[i] = points[loop_i][i];
         vMax[i] /= 1000; // change the velocity unit to meter per ms
         aMax[i] /= 1000000; // change the unit to meter per ms square
@@ -505,7 +514,7 @@ void SendMotorCmd(int n){
     timeout.push_back(nodeList[n]->Motion.MovePosnDurationMsec(step, true)); // absolute position
     nodeList[n]->Motion.Adv.TriggerGroup(1);
     double trqMeas = nodeList[n]->Motion.TrqMeasured;
-    cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
+    // cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
     // cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
 
     // should we put some saftely factor on tracking position error? set a flag
@@ -523,7 +532,7 @@ void SendMotorTrq(int n){
     // nodeList[n]->Motion.Adv.TriggerGroup(1);
 
     if(currentTorque > targetTorque[n]){ nodeList[n]->Motion.MoveVelStart(-300); }
-    else if (currentTorque < targetTorque[n] - 3){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
+    else if (currentTorque < targetTorque[n] - 1.8){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
     else{ nodeList[n]->Motion.MoveVelStart(-10);}
     // printf("Node[%d], current torque: %f\tCommmanded step: %d\n", n, currentTorque, moveSize);
     printf("Node[%d], current torque: %f\n", n, currentTorque);
@@ -548,7 +557,7 @@ void SendMotorGrp(bool IsTorque){
 }
 
 void TrjHome(){// !!! Define the task space velocity limit for homing !!!
-    double velLmt = 0.01; // unit in meters per sec
+    double velLmt = 0.05; // unit in meters per sec
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt*1000; // *1000 to change unit to ms
     double t = 0;
     cout << "Expected homing duration: " << dura <<"ms\n";
