@@ -33,11 +33,11 @@ vector<double> timeout, spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
 const double step = 0.02; // in meters, for manual control
-const float targetTorque[8] = {-2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5, -2.5}; // in percentage, -ve for tension?
+float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {1.741, -1.149, 0.575, -0.153589, -0.003839724, -0.06928957}; // home posisiton //TODO: make a txt file for this?
-double offset[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.741, -1.149, 0.575, -0.153589, -0.003839724, -0.06928957}; //{2, 2, 1, 0, 0, 0};
+double home[6] = {1.629, -1.737, 0.605, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double offset[8]; // L0, from "zero position", will be updated by "set home" command
+double in1[6] = {1.629, -1.00002, 0.605, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
 double out1[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -59,13 +59,17 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update home position from external file\nn - Move on to Next step" << endl;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update home position from external file\nn - Move on to Next step" << endl;
+    pose_to_length(home, offset); // save offset values according to home pose
     char cmd;
     do {
         bool allDone = false, stabilized = false;
         cin >> cmd;
         switch (cmd){
+            case 'y':
+                targetTorque = 1;
             case 't':   // Tighten cables according to torque
+                cout << "Current target torque = " << targetTorque << endl;
                 for(INode* n : nodeList){ n->Motion.AccLimit = 200; }
                 while(!stabilized) {
                     SendMotorGrp(true);
@@ -78,7 +82,7 @@ int main()
                     // }
                     Sleep(50);
                    for (int n = 0; n < nodeList.size(); n++){
-                        if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque[n]) { break; }
+                        if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque) { break; }
                         stabilized = true;
                     }
                 } 
@@ -89,13 +93,13 @@ int main()
                     n->Motion.AccLimit = 40000;
                 }
                 cout << "\nTorque mode tightening completed" << endl;
+                targetTorque = -2.5;
                 break;
             case 's':   // Set zero
                 for (int n = 0; n < nodeList.size(); n++){
                     nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
                 }
                 copy(begin(home), end(home), begin(in1)); // copy home array into input array
-                pose_to_length(in1, offset); // save offset values according to home pose
                 cout << "Setting zero completed" << endl;
                 break;
             case 'h':   // Homing
@@ -129,35 +133,49 @@ int main()
                                 case 'd':
                                 nodeList[id]->Motion.MovePosnStart(-sCount);
                                 break;
+                                case 'i':
+                                nodeList[id]->Motion.PosnMeasured.Refresh();
+                                cout << (double) nodeList[id]->Motion.PosnMeasured << endl;
+                                break;
+                                case 'h':
+                                nodeList[id]->Motion.VelLimit = 300;
+                                nodeList[id]->Motion.MoveWentDone();
+                                nodeList[id]->Motion.MovePosnStart(0, true);
+                                while(!nodeList[id]->Motion.MoveIsDone()){}
+                                cout << "Individual hominf completed.\n";
+                                nodeList[id]->Motion.VelLimit = 3000;
+                                break;
                             }
                             Sleep(100); // do we need this?
-                        }while(cmd =='a'|| cmd =='d');
+                        }while(cmd =='a'|| cmd =='d' || cmd =='h' || cmd =='i');
                         cout << "Motor "<< id <<" deselected.\n";
                     }
                 }
                 cout << "Manual adjustment terminated" << endl;
                 break;
-            case 'u':
-                ifstream file ("home.csv");
+            case 'u':   // Update home[] and offset[] from csv file
+                ifstream file ("home.csv"); //ifstream file ("currentPos.csv");
                 string temp;
                 int count = 0;
                 if(file.is_open()){
                     try{
                         while (file >> temp){
                             home[count++] = stod(temp); // convert string to double stod()
+                            // in1[count++] = stod(temp); // convert string to double stod()
                         }
-                        cout << "Completed updating from external home file" << endl;
+                        cout << "Completed updating from external home file" << endl; //"Completed updating from external pose file"
                     }
                     catch(int e){ cout << "Check if home.csv matches the home input no." << endl; }
+                    pose_to_length(home, offset); // save offset values according to home pose
                 }
                 break;
         }
     } while(cmd != 'n'); 
     
-    cout << "Choose from menu for cable robot motion:\nt - Read from \"input.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
+    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
     do {
         cin >> cmd;
-        ifstream file ("input.csv");
+        ifstream file ("traj.csv");
         vector<double> row;
         string line, word, temp;
         switch (cmd){
@@ -319,43 +337,11 @@ int main()
                         }
                     }
                 }
-                cout << "Quiting manual control...\n";
+                cout << "Quit manual control\n";
                 break;
         }
     } while(cmd != 'n'); 
 
-    // Test torque control frequency
-    /*for (int n = 0; n < nodeList.size(); n++){
-        auto previousT = chrono::steady_clock::now();
-        long dur = 0;
-        double targetTrq = 3;
-        double targetVel;
-        double Kq = 5;
-        
-        cout << "Node " << n << " start torque test" << endl;
-        for (int i = 0; i < 30; i++){
-            nodeList[n]->Motion.TrqMeasured.Refresh();
-			float motorCur = nodeList[n]->Motion.TrqMeasured.Value();
-            targetVel = -Kq * (targetTrq + motorCur);
-            printf("Current size: \t%f \t%f \n", motorCur, targetVel);
-            nodeList[n]->Motion.Adv.MoveVelStart(targetVel);
-            myMgr->Delay(nodeList[n]->Motion.Adv.MoveVelDurationMsec(targetVel));
-            if (motorCur < -15) { //safety measure
-                nodeList[n]->Motion.Adv.MoveVelStart(0);
-                break;
-            }  
-
-            // show frequency
-            auto now = chrono::steady_clock::now();
-            dur = chrono::duration_cast<chrono::milliseconds>(now-previousT).count();
-            previousT = now;
-            cout << "Loop time: "<< dur << endl;
-        }
-        nodeList[n]->Motion.Adv.MoveVelStart(0);
-        cout << "Node " << n << " complete torque test\n" << endl;
-        Sleep(2000);
-    }*/
-    
     Sleep(1000); // wait a little more before disabling the nodes
 
     // Saving last position before quiting programme
@@ -461,7 +447,7 @@ void SolveCubicCoef(int loop_i){
 int SolveParaBlend(int loop_i, bool showAttention){
     // make them accessable from outside??
     float vMax[6] = {.4, .4, .4, 0.8, 0.8, 0.8}; // m/s, define the maximum velocity for each DoF
-    float aMax[6] = {20, 20, 20, 10, 10, 10}; // m/s^2, define the maximum acceleration for each DoF
+    float aMax[6] = {50, 50, 50, 10, 10, 10}; // m/s^2, define the maximum acceleration for each DoF
     double sQ[6], Q[6], o[6];
     double dura = points[loop_i][6];
     
@@ -531,8 +517,8 @@ void SendMotorTrq(int n){
     // nodeList[n]->Motion.MovePosnStart(moveSize, false, true);
     // nodeList[n]->Motion.Adv.TriggerGroup(1);
 
-    if(currentTorque > targetTorque[n]){ nodeList[n]->Motion.MoveVelStart(-300); }
-    else if (currentTorque < targetTorque[n] - 1.8){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
+    if(currentTorque > targetTorque){ nodeList[n]->Motion.MoveVelStart(-300); }
+    else if (currentTorque < targetTorque - 1.8){ nodeList[n]->Motion.MoveVelStart(150); cout << "Too much torque!!\n";}
     else{ nodeList[n]->Motion.MoveVelStart(-10);}
     // printf("Node[%d], current torque: %f\tCommmanded step: %d\n", n, currentTorque, moveSize);
     printf("Node[%d], current torque: %f\n", n, currentTorque);
@@ -554,9 +540,14 @@ void SendMotorGrp(bool IsTorque){
         nodeThreads[i].join();
     }
     myPort.Adv.TriggerMovesInGroup(1);
+
+    ofstream myfile;
+    myfile.open ("currentPos.csv");
+    myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5];
+    myfile.close();
 }
 
-void TrjHome(){// !!! Define the task space velocity limit for homing !!!
+void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: solve long distance homing bug
     double velLmt = 0.05; // unit in meters per sec
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt*1000; // *1000 to change unit to ms
     double t = 0;
@@ -578,7 +569,7 @@ void TrjHome(){// !!! Define the task space velocity limit for homing !!!
         }
         cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
         pose_to_length(in1, out1);
-        cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+        // cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
         SendMotorGrp();
 
         auto end = chrono::steady_clock::now();
