@@ -29,22 +29,22 @@ bool CheckLimits();
 vector<string> comHubPorts;
 vector<INode*> nodeList; // create a list for each node
 vector<vector<double>> points;
-vector<double> timeout, spcLimit;
+vector<double> spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
 const double step = 0.02; // in meters, for manual control
 float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {1.629, -1.737, 0.605, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double home[6] = {1.4, -1.85, 0.7, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[8]; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.629, -1.00002, 0.605, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
-double out1[8] = {2.69493, 2.46881, 2.32884, 2.0586, 2.27977, 1.99895, 2.64927, 2.41526}; // assume there are 8 motors
+double in1[6] = {1.4, -1.85, 0.7, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
 int main()
 {
     SysManager* myMgr = SysManager::Instance();
-
+    
     // Start the programme, scan motors in network
     try{
         if (CheckMotorNetwork() < 0){
@@ -142,7 +142,7 @@ int main()
                                 nodeList[id]->Motion.MoveWentDone();
                                 nodeList[id]->Motion.MovePosnStart(0, true);
                                 while(!nodeList[id]->Motion.MoveIsDone()){}
-                                cout << "Individual hominf completed.\n";
+                                cout << "Individual homing completed.\n";
                                 nodeList[id]->Motion.VelLimit = 3000;
                                 break;
                             }
@@ -173,6 +173,7 @@ int main()
     } while(cmd != 'n'); 
     
     cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
+    
     do {
         cin >> cmd;
         ifstream file ("traj.csv");
@@ -255,7 +256,6 @@ int main()
                         // end = chrono::steady_clock::now();
                         // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                         // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
-                        timeout.clear();
                         t += MILLIS_TO_NEXT_FRAME;
                     }
                     cout << "----------Completed point " << i <<"----------" << endl;
@@ -295,7 +295,7 @@ int main()
                         case 'h':
                             cout << "Homing...\n"; 
                             TrjHome();
-                            copy(begin(home), end(home), begin(in1));
+                            //copy(begin(home), end(home), begin(in1));
                             break;
                     }
                     cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
@@ -305,7 +305,7 @@ int main()
                         
                         SendMotorGrp();
                         
-                        // should we wait for a while here??
+                        Sleep(step*1000);
                     }
                     else{
                         cout << "WARNING: Intended position out of bound!\n";
@@ -341,6 +341,7 @@ int main()
                 break;
         }
     } while(cmd != 'n'); 
+    
 
     Sleep(1000); // wait a little more before disabling the nodes
 
@@ -349,7 +350,7 @@ int main()
     ofstream myfile;
     myfile.open ("data.txt");
     myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
-    myfile << out1[0] << ", " << out1[1] << ", " << out1[2] << ", " << out1[3] <<  out1[4] << ", " << out1[5] << ", " << out1[6] << ", " << out1[7] <<  endl;
+    myfile << out1[0] << ", " << out1[1] << ", " << out1[2] << ", " << out1[3] <<  ", " << out1[4] << ", " << out1[5] << ", " << out1[6] << ", " << out1[7] <<  endl;
     myfile.close();
     // Homing before shut down
     TrjHome();
@@ -434,7 +435,7 @@ void SolveCubicCoef(int loop_i){
     // is it necessary to know the current position?
     
     for(int i = 0; i < 6; i++){
-        sQ[i] = loop_i == 0 ? home[i] : points[loop_i - 1][i];
+        sQ[i] = in1[i];
         Q[i] = points[loop_i][i];
             
         // solve coefficients of equations for cubic
@@ -497,9 +498,8 @@ void SendMotorCmd(int n){
     int32_t step = ToMotorCmd(n, out1[n]);
     nodeList[n]->Motion.MoveWentDone();
     nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
-    timeout.push_back(nodeList[n]->Motion.MovePosnDurationMsec(step, true)); // absolute position
     nodeList[n]->Motion.Adv.TriggerGroup(1);
-    double trqMeas = nodeList[n]->Motion.TrqMeasured;
+    // double trqMeas = nodeList[n]->Motion.TrqMeasured;
     // cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
     // cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
 
@@ -540,11 +540,6 @@ void SendMotorGrp(bool IsTorque){
         nodeThreads[i].join();
     }
     myPort.Adv.TriggerMovesInGroup(1);
-
-    ofstream myfile;
-    myfile.open ("currentPos.csv");
-    myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5];
-    myfile.close();
 }
 
 void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: solve long distance homing bug
@@ -552,6 +547,7 @@ void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: 
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt*1000; // *1000 to change unit to ms
     double t = 0;
     cout << "Expected homing duration: " << dura <<"ms\n";
+    if (dura == 0){ return; }
 
     for(int i = 0; i < 6; i++){
         // solve coefficients of equations for cubic
@@ -570,8 +566,9 @@ void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: 
         cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
         pose_to_length(in1, out1);
         // cout << "OUT: "<<  out1[0] << " " << out1[1] << " " << out1[2] << " " << out1[3] << endl;
+        
         SendMotorGrp();
-
+        
         auto end = chrono::steady_clock::now();
         dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
         cout << " Before sleep: " << dur << endl;

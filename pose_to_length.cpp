@@ -7,36 +7,35 @@ using namespace Eigen;
 using namespace std;
 
 void pose_to_length(double pose[], double lengths[]){
-    ///// Define the cable robot parameters here !! /////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////// Define the cable robot parameters here !! //////////////////////////////////
     const int CABLE_NUM = 8;
 
     Vector3d frmOut[CABLE_NUM]; // coordinates of the fixed outlets on frame
-    frmOut[0] << -0.0401, -3.7717, 1.6697;
-    frmOut[1] << 0.0045, -3.7794, 0.0693;
-    frmOut[2] << -0.0593, 0.0338, 1.6535;
-    frmOut[3] << -0.0099, 0.0268, 0.0495;
-    frmOut[4] << 2.8405, 0.0526, 1.6665;
-    frmOut[5] << 2.7957, 0.0424, 0.0486;
-    frmOut[6] << 2.8785, -3.7468, 1.6771;
-    frmOut[7] << 2.8341, -3.7545, 0.0767;
+    frmOut[0] << 2.683, 0.0505, 3.372;
+    frmOut[1] << -0.175, 0.0795, 3.375;
+    frmOut[2] << 2.614, 0.0325, 0.050;
+    frmOut[3] << 0.000, 0.0325, 0.050;
+    frmOut[4] << 3.287, -6.5255, 3.555;
+    frmOut[5] << -0.6805, -6.4305, 3.610;
+    frmOut[6] << 3.068, -6.5075, 0.088;
+    frmOut[7] << -0.553, -6.4445, 0.077;
 
-    Vector3d frmOutUnitV[CABLE_NUM]; // unit vectors/directions of the fixed outlets on frame
+    Vector3d frmOutUnitV[CABLE_NUM]; // unit vectors/directions of the fixed cable attachments on frame
     for(int i = 0; i < CABLE_NUM; i++){ frmOutUnitV[i] << 0, 0, 1; }
 
-    Vector3d endOut[CABLE_NUM]; // local coordinates of cable outlets on end-effector, ie ^er_B
-    endOut[0] << -0.12, -0.145, 0.05;
-    endOut[1] << -0.12, -0.145, -0.05;
-    endOut[2] << -0.12, 0.145, 0.05;
-    endOut[3] << -0.12, 0.145, -0.05;
-    endOut[4] << 0.12, 0.145, 0.05;
-    endOut[5] << 0.12, 0.145, -0.05;
-    endOut[6] << 0.12, -0.145, 0.05;
-    endOut[7] << 0.12, -0.145, -0.05;
+    Vector3d endOut[CABLE_NUM]; // local coordinates of cable attachment points on end-effector, ie ^er_B
+    endOut[0] << 0.0875, 0.050, -0.225;
+    endOut[1] << -0.0875, 0.050, -0.225;
+    endOut[2] << 0.1675, 0.045, 0.225;
+    endOut[3] << -0.1675, 0.045, 0.225;
+    endOut[4] << 0.0875, -0.050, -0.225;
+    endOut[5] << -0.0875, -0.050, -0.225;
+    endOut[6] << 0.1675, -0.045, 0.225;
+    endOut[7] << -0.1675, -0.045, 0.225;
 
-    const double pRadius = 0.024; // radius of rotating pulley on frame //0.025
+    const double pRadius = 0.025; // radius of rotating pulley on frame //0.025
 
-    ///// End of manual model defination !! /////////////////////////////////////////////////////////////////////////////
-    
+    ////////////////////////////////// End of manual model defination !! //////////////////////////////////    
     // local variables
     Vector3d orB[CABLE_NUM]; // vector from frame 0 origin to end effector cable outlet
     Vector3d orA[CABLE_NUM]; // vector from frame 0 origin to cable outlet point on rotating pulley
