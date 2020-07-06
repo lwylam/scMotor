@@ -351,7 +351,6 @@ int main()
         }
     } while(cmd != 'n'); 
     
-
     Sleep(1000); // wait a little more before disabling the nodes
 
     // Saving last position before quiting programme
@@ -361,8 +360,11 @@ int main()
     myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
     myfile << out1[0] << ", " << out1[1] << ", " << out1[2] << ", " << out1[3] <<  ", " << out1[4] << ", " << out1[5] << ", " << out1[6] << ", " << out1[7] <<  endl;
     myfile.close();
-    // Homing before shut down
-    TrjHome();
+
+    // Homing before shut down?
+    cout << "Do you want to home the robot before shutting down? (Y/N)\n";
+    cin >> cmd;
+    if(cmd == 'y' || cmd == 'Y'){ TrjHome(); }
 
     cout << "Disabling motors and closing ports" << endl;
     for(int i = 0; i < nodeList.size(); i++){ //Disable Nodes
