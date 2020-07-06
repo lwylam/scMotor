@@ -35,9 +35,9 @@ const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors befo
 const double step = 0.02; // in meters, for manual control
 float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {1.4, -1.85, 0.7, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double home[6] = {1.714, -2.800, 0.37, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[8]; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.4, -1.85, 0.7, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double in1[6] = {1.714, -2.800, 0.37, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -154,19 +154,28 @@ int main()
                 cout << "Manual adjustment terminated" << endl;
                 break;
             case 'u':   // Update home[] and offset[] from csv file
-                ifstream file ("home.csv"); //ifstream file ("currentPos.csv");
+                ifstream file ("currentPos.csv");//ifstream file ("home.csv"); //
                 string temp;
                 int count = 0;
                 if(file.is_open()){
                     try{
                         while (file >> temp){
-                            home[count++] = stod(temp); // convert string to double stod()
-                            // in1[count++] = stod(temp); // convert string to double stod()
+                            // home[count++] = stod(temp); // convert string to double stod()
+                            in1[count++] = stod(temp); // convert string to double stod()
                         }
-                        cout << "Completed updating from external home file" << endl; //"Completed updating from external pose file"
+                        cout << "Completed updating from external Current Pose file" << endl; //"Completed updating from external pose file"
                     }
                     catch(int e){ cout << "Check if home.csv matches the home input no." << endl; }
-                    pose_to_length(home, offset); // save offset values according to home pose
+                    // pose_to_length(home, offset); // save offset values according to home pose
+                    // copy(begin(home), end(home), begin(in1)); // copy home array into input array
+                    
+                    // Update each motor cout according to current in1[]
+                    pose_to_length(in1, out1);
+                    for (int n = 0; n < nodeList.size(); n++){
+                        int32_t step = ToMotorCmd(n, out1[n]);
+                        nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value() + step);
+                    }
+                    cout << "Updating motor counts completed" << endl;
                 }
                 break;
         }
