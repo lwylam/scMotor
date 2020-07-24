@@ -32,12 +32,12 @@ vector<vector<double>> points;
 vector<double> spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
-const double step = 0.02; // in meters, for manual control
+double step = 0.01; // in meters, for manual control
 float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {1.714, -2.800, 0.37, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
-double offset[8]; // L0, from "zero position", will be updated by "set home" command
-double in1[6] = {1.714, -2.800, 0.37, 0, 0, 0}; //{2, 2, 1, 0, 0, 0};
+double home[6] = {2.197, -2.92, 1.02399, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" command
+double in1[6] = {2.197, -2.92, 1.02399, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -181,7 +181,7 @@ int main()
         }
     } while(cmd != 'n'); 
     
-    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f\nany other key - Disable motors and exit programme" << endl;
+    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\nn - Prepare to disable motors and exit programme" << endl;
     
     do {
         cin >> cmd;
@@ -267,12 +267,12 @@ int main()
                         // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
                         t += MILLIS_TO_NEXT_FRAME;
                     }
-                    cout << "----------Completed point " << i <<"----------" << endl;
+                    cout << "----------Completed point " << i + 1 <<"----------" << endl;
                 }
                 break;
             case 'm':   // Manual wasdrf
             case 'M':
-                cout << "Press 'q' to quit manual input anytime.\t'h' for Homing\n";
+                cout << "Press 'q' to quit manual input anytime.\n'h' for Homing.\n'p' to adjust increment step size.\n";
                 while(cmd != 'q' && cmd != 'Q'){
                     cmd = getch();
                     switch(cmd){
@@ -300,11 +300,31 @@ int main()
                         case 'f':
                             in1[2] -= step;
                             break;
+                        case 'G':
+                        case 'g':
+                            in1[1] -= step*0.7;
+                            in1[2] += step;
+                            break;
+                        case 'V':
+                        case 'v':                        
+                            in1[1] += step*0.7;
+                            in1[2] -= step;
+                            break;
                         case 'H':
                         case 'h':
                             cout << "Homing...\n"; 
                             TrjHome();
                             //copy(begin(home), end(home), begin(in1));
+                            break;
+                        case 'P':
+                        case 'p':
+                            cout << "Current step size: " << step << "m. Please enter new step size: ";
+                            cin >> step;
+                            if (!cin.good()){ cout << "Invalid input!"; }
+                            else if (abs(step) > 0.1){ cout << "Warning! Step size is too large, may cause vigorious motions.";}
+                            else { cout << "New step size: " << step << endl; break; }
+                            cout << " Step size is now set to 0.01m.\n";
+                            step = 0.01;
                             break;
                     }
                     cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
@@ -343,6 +363,16 @@ int main()
                             case 'f':
                                 in1[2] += step;
                                 break;
+                            case 'G':
+                            case 'g':
+                                in1[1] += step*0.7;
+                                in1[2] -= step;
+                                break;
+                            case 'V':
+                            case 'v':                        
+                                in1[1] -= step*0.7;
+                                in1[2] += step;
+                                break;
                         }
                     }
                 }
@@ -364,7 +394,10 @@ int main()
     // Homing before shut down?
     cout << "Do you want to home the robot before shutting down? (Y/N)\n";
     cin >> cmd;
-    if(cmd == 'y' || cmd == 'Y'){ TrjHome(); }
+    if(cmd == 'y' || cmd == 'Y'){
+        TrjHome();
+        cout << "Homing completed.\n";
+    }
 
     cout << "Disabling motors and closing ports" << endl;
     for(int i = 0; i < nodeList.size(); i++){ //Disable Nodes
@@ -553,7 +586,7 @@ void SendMotorGrp(bool IsTorque){
     myPort.Adv.TriggerMovesInGroup(1);
 }
 
-void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: solve long distance homing bug
+void TrjHome(){// !!! Define the task space velocity limit for homing !!!
     double velLmt = 0.05; // unit in meters per sec
     double dura = sqrt(pow(in1[0]-home[0],2)+pow(in1[1]-home[1],2)+pow(in1[2]-home[2],2))/velLmt*1000; // *1000 to change unit to ms
     double t = 0;
@@ -590,7 +623,7 @@ void TrjHome(){// !!! Define the task space velocity limit for homing !!! TODO: 
 
         end = chrono::steady_clock::now();
         dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-        cout << " Time elasped: " << dur << "\tIn-loop t: " << t << endl;
+        cout << " Time elasped: " << dur << "\tTime left: " << dura - t << endl;
         t += MILLIS_TO_NEXT_FRAME;
     }
     cout << "Homing with trajectory completed\n";
