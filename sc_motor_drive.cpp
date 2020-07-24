@@ -153,7 +153,7 @@ int main()
                 }
                 cout << "Manual adjustment terminated" << endl;
                 break;
-            case 'u':   // Update home[] and offset[] from csv file
+            case 'u':   // Update in1[] and offset[] from csv file
                 ifstream file ("currentPos.csv");//ifstream file ("home.csv"); //
                 string temp;
                 int count = 0;
@@ -386,7 +386,7 @@ int main()
     // Saving last position before quiting programme
     cout << "Saving last position...\n";
     ofstream myfile;
-    myfile.open ("data.txt");
+    myfile.open ("lastPos.txt");
     myfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
     myfile << out1[0] << ", " << out1[1] << ", " << out1[2] << ", " << out1[3] <<  ", " << out1[4] << ", " << out1[5] << ", " << out1[6] << ", " << out1[7] <<  endl;
     myfile.close();
