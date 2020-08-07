@@ -252,8 +252,6 @@ int main()
 
                         SendMotorGrp();
 
-                        // double t_max =  myMgr->TimeStampMsec() + *max_element(timeout.begin(), timeout.end()) + 100;
-                        // cout << "Estimated time: " << t_max;
                         auto end = chrono::steady_clock::now();
                         dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                         // cout << "Before sleep: " << dur << endl;
@@ -266,6 +264,16 @@ int main()
                         // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
                         // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
                         t += MILLIS_TO_NEXT_FRAME;
+
+                        if(kbhit()){ // Emergency quit during trajectory control
+                            cout << "\nSystem interrupted!! Do you want to quit the trajectory control?\nq - Quit trajectory\nr - Resume trajectory\n";
+                            cin >> cmd;
+                            if(cmd == 'q' || cmd == 'Q'){
+                                cout << "Trajectory control aborted.\n";
+                                i = points.size();
+                                break;
+                            }
+                        }
                     }
                     cout << "----------Completed point " << i + 1 <<"----------" << endl;
                 }
