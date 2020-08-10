@@ -11,12 +11,14 @@
 #include <windows.h>
 #include "compile_lengths.h"
 #include "pose_to_length.h"
+#include "parameter_traj.h"
 #include "Dependencies\sFoundation20\inc\pubSysCls.h"
 
 using namespace std;
 using namespace sFnd;
 
 int CheckMotorNetwork();
+void RunTrajPoints();
 void SendMotorCmd(int n);
 void SendMotorTrq(int n);
 void SolveCubicCoef(int loop_i);
@@ -37,7 +39,7 @@ float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
 double home[6] = {2.197, -2.92, 1.02399, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" command
-double in1[6] = {2.197, -2.92, 1.02399, 0, 0, 0};
+double in1[6] = {2.197 , -2.92, 1.02399, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -101,6 +103,7 @@ int main()
                 }
                 copy(begin(home), end(home), begin(in1)); // copy home array into input array
                 cout << "Setting zero completed" << endl;
+                cout <<  "Home coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
                 break;
             case 'h':   // Homing
                 allDone = false;
@@ -181,7 +184,7 @@ int main()
         }
     } while(cmd != 'n'); 
     
-    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\nn - Prepare to disable motors and exit programme" << endl;
+    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\nn - Prepare to disable motors and exit programme" << endl;
     
     do {
         cin >> cmd;
@@ -209,74 +212,7 @@ int main()
                     return -1;
                 }
 
-                // Go through the given points
-                for (int i = 0; i < points.size(); i++) {
-                    double t = 0;
-                    // trajectory generation and points splitting
-                    // SolveCubicCoef(i);
-                    if(SolveParaBlend(i, true) < 0) { 
-                        return -3; 
-                    }
-                    cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
-                    
-                    while (t <= points[i][6]){
-                        auto start = chrono::steady_clock::now();
-                        long dur = 0;
-                        
-                        // per time step pose
-                        // CUBIC equation
-                        // for (int j = 0; j < 6; j++){
-                        //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
-                        // }
-                        // PARABOLIC BLEND equation
-                        for (int j = 0; j < 6; j++){
-                            if (t <= tb[j]){
-                                in1[j] = a[j] + b[j] * t * t;
-                            }
-                            else if(t <= points[i][6]-tb[j]){
-                                in1[j] = c[j] + d[j] * t;
-                            }
-                            else{
-                                in1[j] = e[j] + f[j] * t + g[j] * t * t;
-                            }
-                        }
-                        // get absolute cable lengths in meters
-                        cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-                        // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
-                        pose_to_length(in1, out1);
-                        cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
-                        
-                        // auto end = chrono::steady_clock::now();
-                        // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                        // cout << "Step to command time: "<< dur << "\t";
-
-                        SendMotorGrp();
-
-                        auto end = chrono::steady_clock::now();
-                        dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                        // cout << "Before sleep: " << dur << endl;
-                        
-                        double dif = MILLIS_TO_NEXT_FRAME - dur - 1;
-                        if(dif > 0) { Sleep(dif);}
-                        // Sleep(MILLIS_TO_NEXT_FRAME);
-
-                        // end = chrono::steady_clock::now();
-                        // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-                        // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
-                        t += MILLIS_TO_NEXT_FRAME;
-
-                        if(kbhit()){ // Emergency quit during trajectory control
-                            cout << "\nSystem interrupted!! Do you want to quit the trajectory control?\nq - Quit trajectory\nr - Resume trajectory\n";
-                            cin >> cmd;
-                            if(cmd == 'q' || cmd == 'Q'){
-                                cout << "Trajectory control aborted.\n";
-                                i = points.size();
-                                break;
-                            }
-                        }
-                    }
-                    cout << "----------Completed point " << i + 1 <<"----------" << endl;
-                }
+                RunTrajPoints();
                 break;
             case 'm':   // Manual wasdrf
             case 'M':
@@ -385,6 +321,22 @@ int main()
                     }
                 }
                 cout << "Quit manual control\n";
+                break;
+            case 'p':   // 
+            case 'P':
+                parameter_traj(points, in1);
+                
+                ofstream pfile;
+                pfile.open ("paramTraj.txt");
+                for(vector<double> line:points){
+                    for(double txt:line){ pfile << txt << "\t"; }
+                    pfile << endl;
+                }
+                pfile.close();
+                
+                cout << "Are you sure to run the parameterized trajectory? (y - confirm run trajectory)\n";
+                cin >> cmd;
+                if(cmd == 'y' || cmd == 'Y'){ RunTrajPoints(); }
                 break;
         }
     } while(cmd != 'n'); 
@@ -539,6 +491,80 @@ int SolveParaBlend(int loop_i, bool showAttention){
     return 0;
 }
 
+void RunTrajPoints(){
+    char cmd;
+    // Go through the given points
+    for (int i = 0; i < points.size(); i++) {
+        double t = 0;
+        // trajectory generation and points splitting
+        // SolveCubicCoef(i);
+        if(SolveParaBlend(i, true) < 0) {
+            cout << "Trajectory aborted.\n";
+            return; 
+        }
+        cout << a[0] << ", " << b[0] << ", " << c[0] << ", " << d[0] << ", " << e[0] << ", " << f[0] << ", "<< g[0] << ", "<< tb[0] << endl;
+        
+        while (t <= points[i][6]){
+            auto start = chrono::steady_clock::now();
+            long dur = 0;
+            
+            // per time step pose
+            // CUBIC equation
+            // for (int j = 0; j < 6; j++){
+            //     in1[j] = a[j] + b[j] * t * t + c[j] * t * t * t;
+            // }
+            // PARABOLIC BLEND equation
+            for (int j = 0; j < 6; j++){
+                if (t <= tb[j]){
+                    in1[j] = a[j] + b[j] * t * t;
+                }
+                else if(t <= points[i][6]-tb[j]){
+                    in1[j] = c[j] + d[j] * t;
+                }
+                else{
+                    in1[j] = e[j] + f[j] * t + g[j] * t * t;
+                }
+            }
+            // get absolute cable lengths in meters
+            cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
+            // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
+            pose_to_length(in1, out1);
+            cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
+            
+            // auto end = chrono::steady_clock::now();
+            // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+            // cout << "Step to command time: "<< dur << "\t";
+
+            SendMotorGrp();
+
+            auto end = chrono::steady_clock::now();
+            dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+            // cout << "Before sleep: " << dur << endl;
+            
+            double dif = MILLIS_TO_NEXT_FRAME - dur - 1;
+            if(dif > 0) { Sleep(dif);}
+            // Sleep(MILLIS_TO_NEXT_FRAME);
+
+            // end = chrono::steady_clock::now();
+            // dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+            // cout << "Time elasped: " << dur << "\tIn-loop t: " << t << endl;
+            t += MILLIS_TO_NEXT_FRAME;
+
+            if(kbhit()){ // Emergency quit during trajectory control
+                cout << "\nSystem interrupted!! Do you want to quit the trajectory control?\nq - Quit trajectory\nr - Resume trajectory\n";
+                cin >> cmd;
+                if(cmd == 'q' || cmd == 'Q'){
+                    cout << "Trajectory control aborted.\n";
+                    t = points[i][6];
+                    i = points.size();
+                    break;
+                }
+            }
+        }
+        cout << "----------Completed point " << i + 1 <<"----------" << endl;
+    }
+}
+
 int32_t ToMotorCmd(int motorID, double length){
     double scale = 820632.006; //814873.3086; // 6400 encoder count per revoltion, 40 times gearbox, 50mm spool radias. ie 6400*40/(2*pi*0.05) 
     if (motorID == -1) { return length * scale; }
@@ -633,6 +659,16 @@ void TrjHome(){// !!! Define the task space velocity limit for homing !!!
         dur = chrono::duration_cast<chrono::milliseconds>(end-start).count();
         cout << " Time elasped: " << dur << "\tTime left: " << dura - t << endl;
         t += MILLIS_TO_NEXT_FRAME;
+        if(kbhit()){ // Emergency quit during trajectory control
+            cout << "\nSystem interrupted!! Do you want to quit the trajectory control?\nq - Quit trajectory\nr - Resume trajectory\n";
+            char cmd;
+            cin >> cmd;
+            if(cmd == 'q' || cmd == 'Q'){
+                cout << "Trajectory control aborted.\n";
+                t = dura;
+                break;
+            }
+        }
     }
     cout << "Homing with trajectory completed\n";
 }
