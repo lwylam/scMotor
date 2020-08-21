@@ -16,14 +16,14 @@ bool lastMove = false;
 
 void parameter_traj(vector<vector<double>>& points, double startPos[]){
 /////////////////// Define the tank parameters here ///////////////////
-    double tankStart[3] = {2.197, -3.486, 0.744}; // poke with end effector
-    double tankX[3] = {2.297, -3.486, 0.744}; // poke with end effector
-    double tankY[3] = {2.197, -4.699, 0.744}; // poke with end effector
-    double tankDepth = -0.3; // meter, define depth from experience?
+    double tankStart[3] = {2.21, -2.484, 0.448}; // poke with end effector
+    double tankX[3] = {2.28, -2.484, 0.448}; // poke with end effector
+    double tankY[3] = {2.19, -3.594, 0.448}; // poke with end effector
+    double tankDepth = -0.2; // meter, define depth from experience?
 
     double plateInclination = 0.959931; // radian, 55 degree, from horizon
     // Vector3d plateDistance(2.237, -3.486, 0); // addition going to next plate start
-    int plateNum = 20; // number of plates to clean
+    int plateNum = 10; // number of plates to clean
     
     double endEffectorWidth = 0.05; // meter
     // float overlapPercentage = 0.1;
@@ -41,7 +41,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     double unitX[3] = {(tankX[0]-tankStart[0])/uX, (tankX[1]-tankStart[1])/uX, (tankX[2]-tankStart[2])/uX};
     // double uY = sqrt(pow(tankY[0]-tankStart[0],2)+pow(tankY[1]-tankStart[1],2)+pow(tankY[2]-tankStart[2],2));
     // double unitY[3] = {(tankY[0]-tankStart[0])/uY, (tankY[1]-tankStart[1])/uY, (tankY[2]-tankStart[2])/uY};
-    double unitPlate[3] = {(tankY[0]-tankStart[0])/plateNum, (tankY[1]-tankStart[1])/plateNum, (tankY[2]-tankStart[2])/plateNum};
+    double unitPlate[3] = {(tankY[0]-tankStart[0])/(plateNum-1), (tankY[1]-tankStart[1])/(plateNum-1), (tankY[2]-tankStart[2])/(plateNum-1)};
     for(double val : unitX){ cout << val << "\t"; }
     cout << "unit vector of X\n";
     for(double val : unitPlate){ cout << val << "\t"; }

@@ -7,7 +7,7 @@ using namespace Eigen;
 using namespace std;
 
 void pose_to_length(double pose[], double lengths[]){
-    ////////////////////////////////// Define the cable robot parameters here !! //////////////////////////////////
+////////////////////////////////// Define the cable robot parameters here !! //////////////////////////////////
     const int CABLE_NUM = 8;
 
     Vector3d frmOut[CABLE_NUM]; // coordinates of the fixed outlets on frame
@@ -24,18 +24,18 @@ void pose_to_length(double pose[], double lengths[]){
     for(int i = 0; i < CABLE_NUM; i++){ frmOutUnitV[i] << 0, 0, 1; }
 
     Vector3d endOut[CABLE_NUM]; // local coordinates of cable attachment points on end-effector, ie ^er_B
-    endOut[0] << 0.0875, 0.050, -0.225;
-    endOut[1] << -0.0875, 0.050, -0.225;
-    endOut[2] << 0.1675, 0.045, 0.225;
-    endOut[3] << -0.1675, 0.045, 0.225;
-    endOut[4] << 0.0875, -0.050, -0.225;
-    endOut[5] << -0.0875, -0.050, -0.225;
-    endOut[6] << 0.1675, -0.045, 0.225;
-    endOut[7] << -0.1675, -0.045, 0.225;
+    endOut[0] << 0.080, 0.050, -0.1775;
+    endOut[1] << -0.080, 0.050, -0.1775;
+    endOut[2] << 0.165, 0.045, 0.1775;
+    endOut[3] << -0.165, 0.045, 0.1775;
+    endOut[4] << 0.080, -0.050, -0.1775;
+    endOut[5] << -0.080, -0.050, -0.1775;
+    endOut[6] << 0.165, -0.045, 0.1775;
+    endOut[7] << -0.165, -0.045, 0.1775;
 
     const double pRadius = 0.025; // radius of rotating pulley on frame //0.025
 
-    ////////////////////////////////// End of manual model defination !! //////////////////////////////////    
+////////////////////////////////// End of manual model defination !! //////////////////////////////////    
     // local variables
     Vector3d orB[CABLE_NUM]; // vector from frame 0 origin to end effector cable outlet
     Vector3d orA[CABLE_NUM]; // vector from frame 0 origin to cable outlet point on rotating pulley

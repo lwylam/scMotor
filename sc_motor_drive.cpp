@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <conio.h>
 #include <windows.h>
-#include "compile_lengths.h"
+// #include "compile_lengths.h"
 #include "pose_to_length.h"
 #include "parameter_traj.h"
 #include "Dependencies\sFoundation20\inc\pubSysCls.h"
@@ -61,7 +61,7 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update home position from external file\nn - Move on to Next step" << endl;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update position from external file\nn - Move on to Next step" << endl;
     pose_to_length(home, offset); // save offset values according to home pose
     char cmd;
     do {
@@ -176,9 +176,17 @@ int main()
                     pose_to_length(in1, out1);
                     for (int n = 0; n < nodeList.size(); n++){
                         int32_t step = ToMotorCmd(n, out1[n]);
+                        nodeList[n]->Motion.PosnMeasured.Refresh();
                         nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value() + step);
                     }
                     cout << "Updating motor counts completed" << endl;
+                    cout << "Current coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
+                    cout << "Motor internal counts: ";
+                    for (int id = 0; id < 8; id++){
+                        nodeList[id]->Motion.PosnMeasured.Refresh();
+                        cout << (double) nodeList[id]->Motion.PosnMeasured << "\t";
+                    }
+                    cout << endl;
                 }
                 break;
         }
@@ -527,7 +535,6 @@ void RunTrajPoints(){
             }
             // get absolute cable lengths in meters
             cout << "IN: "<< in1[0] << " " << in1[1] << " " << in1[2] << " " << in1[3] << " " << in1[4] << " " << in1[5] << endl;
-            // q_initial="2 0.5 2 0 0 0" q_min="0 0 0 -3.1415 -3.1415 -3.1415" q_max="5.0 1.0 5.0 3.1416 3.1416 3.1416"
             pose_to_length(in1, out1);
             cout << "OUT: "<<  out1[0] << "\t" << out1[1] << "\t" << out1[2] << "\t" << out1[3] << "\t" <<  out1[4] << "\t" << out1[5] << "\t" << out1[6] << "\t" << out1[7] << endl;
             
