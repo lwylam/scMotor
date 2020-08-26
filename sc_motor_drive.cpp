@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <conio.h>
 #include <windows.h>
-// #include "compile_lengths.h"
 #include "pose_to_length.h"
 #include "parameter_traj.h"
 #include "Dependencies\sFoundation20\inc\pubSysCls.h"
@@ -37,7 +36,7 @@ const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors befo
 double step = 0.01; // in meters, for manual control
 float targetTorque = -2.5; // in percentage, -ve for tension?
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {2.197, -2.92, 1.02399, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double home[6] = {2.18, -3.263, 1.2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
 double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" command
 double in1[6] = {2.197 , -2.92, 1.02399, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
@@ -64,133 +63,140 @@ int main()
     cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update position from external file\nn - Move on to Next step" << endl;
     pose_to_length(home, offset); // save offset values according to home pose
     char cmd;
-    do {
-        bool allDone = false, stabilized = false;
-        cin >> cmd;
-        switch (cmd){
-            case 'y':
-                targetTorque = 1;
-            case 't':   // Tighten cables according to torque
-                cout << "Current target torque = " << targetTorque << endl;
-                for(INode* n : nodeList){ n->Motion.AccLimit = 200; }
-                while(!stabilized) {
-                    SendMotorGrp(true);
-                    // while(!allDone) {
-                    //     for (INode* n : nodeList) {
-                    //         // if(!n->Motion.MoveIsDone()) { break; }
-                    //         if(!n->Motion.VelocityAtTarget()) { break; }
-                    //         allDone = true;
-                    //     }
-                    // }
-                    Sleep(50);
-                   for (int n = 0; n < nodeList.size(); n++){
-                        if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque) { break; }
-                        stabilized = true;
-                    }
-                } 
-                for(INode* n : nodeList){
-                    n->Motion.TrqCommanded.Refresh();
-                    cout << n->Motion.TrqCommanded.Value() << "\t";
-                    n->Motion.MoveVelStart(0);
-                    n->Motion.AccLimit = 40000;
-                }
-                cout << "\nTorque mode tightening completed" << endl;
-                targetTorque = -2.5;
-                break;
-            case 's':   // Set zero
-                for (int n = 0; n < nodeList.size(); n++){
-                    nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
-                }
-                copy(begin(home), end(home), begin(in1)); // copy home array into input array
-                cout << "Setting zero completed" << endl;
-                cout <<  "Home coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
-                break;
-            case 'h':   // Homing
-                allDone = false;
-                for (int n = 0; n<myPort.NodeCount(); n++) { 
-                    nodeList[n]->Motion.MoveWentDone();
-                    nodeList[n]->Motion.MovePosnStart(0, true); // absolute position
-                }
-                while(!allDone) {
-                    for (INode* n : nodeList) {
-                        if(!n->Motion.MoveIsDone()) { break; }
-                        allDone = true;
-                    }
-                }
-                cout << "Homing completed" << endl;
-                break;
-            case '8':   // Manual cable adjustment
-                cout << "0 to 7 - motor id to adjust cable length\na or d - increase or decrease cable length\nb - Back to previous menu\n";
-                while(cmd != 'b'){
-                    cin >> cmd;
-                    if('/' < cmd && cmd < nodeList.size()+48){
-                        int id = cmd - 48;
-                        int sCount = ToMotorCmd(-1, step) / 5;
-                        cout << "Motor "<< cmd <<" selected.\n";
-                        do{
-                            cmd = getch();
-                            switch(cmd){
-                                case 'a':
-                                nodeList[id]->Motion.MovePosnStart(sCount);
-                                break;
-                                case 'd':
-                                nodeList[id]->Motion.MovePosnStart(-sCount);
-                                break;
-                                case 'i':
-                                nodeList[id]->Motion.PosnMeasured.Refresh();
-                                cout << (double) nodeList[id]->Motion.PosnMeasured << endl;
-                                break;
-                                case 'h':
-                                nodeList[id]->Motion.VelLimit = 300;
-                                nodeList[id]->Motion.MoveWentDone();
-                                nodeList[id]->Motion.MovePosnStart(0, true);
-                                while(!nodeList[id]->Motion.MoveIsDone()){}
-                                cout << "Individual homing completed.\n";
-                                nodeList[id]->Motion.VelLimit = 3000;
-                                break;
-                            }
-                            Sleep(100); // do we need this?
-                        }while(cmd =='a'|| cmd =='d' || cmd =='h' || cmd =='i');
-                        cout << "Motor "<< id <<" deselected.\n";
-                    }
-                }
-                cout << "Manual adjustment terminated" << endl;
-                break;
-            case 'u':   // Update in1[] and offset[] from csv file
-                ifstream file ("currentPos.csv");//ifstream file ("home.csv"); //
-                string temp;
-                int count = 0;
-                if(file.is_open()){
-                    try{
-                        while (file >> temp){
-                            // home[count++] = stod(temp); // convert string to double stod()
-                            in1[count++] = stod(temp); // convert string to double stod()
-                        }
-                        cout << "Completed updating from external Current Pose file" << endl; //"Completed updating from external pose file"
-                    }
-                    catch(int e){ cout << "Check if home.csv matches the home input no." << endl; }
-                    // pose_to_length(home, offset); // save offset values according to home pose
-                    // copy(begin(home), end(home), begin(in1)); // copy home array into input array
-                    
-                    // Update each motor cout according to current in1[]
-                    pose_to_length(in1, out1);
+    try{
+        do {
+            bool allDone = false, stabilized = false;
+            cin >> cmd;
+            switch (cmd){
+                case 'y':
+                    targetTorque = 1;
+                case 't':   // Tighten cables according to torque
+                    cout << "Current target torque = " << targetTorque << endl;
+                    for(INode* n : nodeList){ n->Motion.AccLimit = 200; }
+                    while(!stabilized) {
+                        SendMotorGrp(true);
+                        // while(!allDone) {
+                        //     for (INode* n : nodeList) {
+                        //         // if(!n->Motion.MoveIsDone()) { break; }
+                        //         if(!n->Motion.VelocityAtTarget()) { break; }
+                        //         allDone = true;
+                        //     }
+                        // }
+                        Sleep(50);
                     for (int n = 0; n < nodeList.size(); n++){
-                        int32_t step = ToMotorCmd(n, out1[n]);
-                        nodeList[n]->Motion.PosnMeasured.Refresh();
-                        nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value() + step);
+                            if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque) { break; }
+                            stabilized = true;
+                        }
+                    } 
+                    for(INode* n : nodeList){
+                        n->Motion.TrqCommanded.Refresh();
+                        cout << n->Motion.TrqCommanded.Value() << "\t";
+                        n->Motion.MoveVelStart(0);
+                        n->Motion.AccLimit = 40000;
                     }
-                    cout << "Updating motor counts completed" << endl;
-                    cout << "Current coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
-                    cout << "Motor internal counts: ";
-                    for (int id = 0; id < 8; id++){
-                        nodeList[id]->Motion.PosnMeasured.Refresh();
-                        cout << (double) nodeList[id]->Motion.PosnMeasured << "\t";
+                    cout << "\nTorque mode tightening completed" << endl;
+                    targetTorque = -2.5;
+                    break;
+                case 's':   // Set zero
+                    for (int n = 0; n < nodeList.size(); n++){
+                        nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value()); // Zeroing the number space around the current Measured Position
                     }
-                    cout << endl;
-                }
-                break;
-        }
-    } while(cmd != 'n'); 
+                    copy(begin(home), end(home), begin(in1)); // copy home array into input array
+                    cout << "Setting zero completed" << endl;
+                    cout <<  "Home coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
+                    break;
+                case 'h':   // Homing
+                    allDone = false;
+                    for (int n = 0; n<myPort.NodeCount(); n++) { 
+                        nodeList[n]->Motion.MoveWentDone();
+                        nodeList[n]->Motion.MovePosnStart(0, true); // absolute position
+                    }
+                    while(!allDone) {
+                        for (INode* n : nodeList) {
+                            if(!n->Motion.MoveIsDone()) { break; }
+                            allDone = true;
+                        }
+                    }
+                    cout << "Homing completed" << endl;
+                    break;
+                case '8':   // Manual cable adjustment
+                    cout << "0 to 7 - motor id to adjust cable length\na or d - increase or decrease cable length\nb - Back to previous menu\n";
+                    while(cmd != 'b'){
+                        cin >> cmd;
+                        if('/' < cmd && cmd < nodeList.size()+48){
+                            int id = cmd - 48;
+                            int sCount = ToMotorCmd(-1, step) / 5;
+                            cout << "Motor "<< cmd <<" selected.\n";
+                            do{
+                                cmd = getch();
+                                switch(cmd){
+                                    case 'a':
+                                        nodeList[id]->Motion.MovePosnStart(sCount);
+                                        break;
+                                    case 'd':
+                                        nodeList[id]->Motion.MovePosnStart(-sCount);
+                                        break;
+                                    case 'i':
+                                        nodeList[id]->Motion.PosnMeasured.Refresh();
+                                        cout << (double) nodeList[id]->Motion.PosnMeasured << endl;
+                                        break;
+                                    case 'h':
+                                        nodeList[id]->Motion.VelLimit = 300;
+                                        nodeList[id]->Motion.MoveWentDone();
+                                        nodeList[id]->Motion.MovePosnStart(0, true);
+                                        while(!nodeList[id]->Motion.MoveIsDone()){}
+                                        cout << "Individual homing completed.\n";
+                                        nodeList[id]->Motion.VelLimit = 3000;
+                                        break;
+                                }                        
+                                Sleep(100); // do we need this?
+                            }while(cmd =='a'|| cmd =='d' || cmd =='h' || cmd =='i');
+                            cout << "Motor "<< id <<" deselected.\n";
+                        }
+                    }
+                    cout << "Manual adjustment terminated" << endl;
+                    break;
+                case 'u':   // Update in1[] and offset[] from csv file
+                    ifstream file ("currentPos.csv");//ifstream file ("home.csv"); //
+                    string temp;
+                    int count = 0;
+                    if(file.is_open()){
+                        try{
+                            while (file >> temp){
+                                // home[count++] = stod(temp); // convert string to double stod()
+                                in1[count++] = stod(temp); // convert string to double stod()
+                            }
+                            cout << "Completed updating from external Current Pose file" << endl; //"Completed updating from external pose file"
+                        }
+                        catch(int e){ cout << "Check if home.csv matches the home input no." << endl; }
+                        // pose_to_length(home, offset); // save offset values according to home pose
+                        // copy(begin(home), end(home), begin(in1)); // copy home array into input array
+                        
+                        // Update each motor cout according to current in1[]
+                        pose_to_length(in1, out1);
+                        for (int n = 0; n < nodeList.size(); n++){
+                            int32_t step = ToMotorCmd(n, out1[n]);
+                            nodeList[n]->Motion.PosnMeasured.Refresh();
+                            nodeList[n]->Motion.AddToPosition(-nodeList[n]->Motion.PosnMeasured.Value() + step);
+                        }
+                        cout << "Updating motor counts completed" << endl;
+                        cout << "Current coordinates: " << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl;
+                        cout << "Motor internal counts: ";
+                        for (int id = 0; id < 8; id++){
+                            nodeList[id]->Motion.PosnMeasured.Refresh();
+                            cout << (double) nodeList[id]->Motion.PosnMeasured << "\t";
+                        }
+                        cout << endl;
+                    }
+                    break;
+            }
+        } while(cmd != 'n');
+    }
+    catch(sFnd::mnErr& theErr) {    //This catch statement will intercept any error from the Class library
+        printf("ERROR: Motor command failed.\n");  
+        printf("Caught error: addr=%d, err=0x%08x\nmsg=%s\n", theErr.TheAddr, theErr.ErrorCode, theErr.ErrorMsg);
+        return -3;
+    }
     
     cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\nn - Prepare to disable motors and exit programme" << endl;
     
@@ -580,10 +586,16 @@ int32_t ToMotorCmd(int motorID, double length){
 
 void SendMotorCmd(int n){
     // convert to absolute cable length command
-    int32_t step = ToMotorCmd(n, out1[n]);
-    nodeList[n]->Motion.MoveWentDone();
-    nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
-    nodeList[n]->Motion.Adv.TriggerGroup(1);
+    try{
+         int32_t step = ToMotorCmd(n, out1[n]);
+        nodeList[n]->Motion.MoveWentDone();
+        nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
+        nodeList[n]->Motion.Adv.TriggerGroup(1);
+    }
+    catch(sFnd::mnErr& theErr) {    //This catch statement will intercept any error from the Class library
+        cout << "\nERROR: Motor [" << n << "] command failed.\n";  
+        printf("Caught error: addr=%d, err=0x%08x\nmsg=%s\n", theErr.TheAddr, theErr.ErrorCode, theErr.ErrorMsg);    
+    }
     // double trqMeas = nodeList[n]->Motion.TrqMeasured;
     // cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
     // cout << "\tPosition error: " << ((double)nodeList[n]->Motion.PosnMeasured-step) << endl;
