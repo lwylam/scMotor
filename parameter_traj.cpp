@@ -31,6 +31,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     double safeHeight = 0.1; // meter, safety height above tank
     double velLmt = 0.05; // unit in meters per sec
     double zeroRotation[3] = {0,0,0};
+    int brushTimes = 1;
 /////////////////// End of tank parameters defination ///////////////////
     
     points.clear(); // Clear the list to start from new
@@ -53,7 +54,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
 
     safeHeight /= 2;
     double plateT = abs(tankDepth)/velLmt*1000;
-    double safeT = safeHeight/velLmt*1000;
+    double safeT = safeHeight/velLmt*1000*2; // slower safe height movements
     copy(begin(zeroRotation), end(zeroRotation), tempPt+3); // set the rotation as zero for all time?
     
     // from current position to start pose
@@ -70,28 +71,37 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     copy(begin(tankStart), end(tankStart), begin(currentP1)); // start of plate first move
     copy(begin(tankStart), end(tankStart), begin(currentP2)); // start of first plate
     copy(begin(tankX), end(tankX), begin(plateLast)); // plate last move
-    for(int p = 0; p < plateNum; p++){
-        for (int i = 0; i < moveNumP; i++){
+    for(int p = 0; p < plateNum; p++){ // diff plates
+        for (int i = 0; i < moveNumP; i++){ // within same plate
             // go down and up
-            tempPt[2] = currentP1[2] + tankDepth; // z-axis
-            tempPt[1] = currentP1[1] - tankDepth/tan(plateInclination); // y-axis
-            tempPt[6] = plateT;
-            points.push_back(vector<double>(tempPt, tempPt+7)); // plate bottom
-            copy(begin(currentP1), end(currentP1), begin(tempPt));
-            points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
+            for (int b = 0; b < brushTimes; b++){
+                tempPt[2] = currentP1[2] + tankDepth; // z-axis
+                tempPt[1] = currentP1[1] - tankDepth/tan(plateInclination); // y-axis
+                tempPt[6] = plateT;
+                points.push_back(vector<double>(tempPt, tempPt+7)); // plate bottom
+                copy(begin(currentP1), end(currentP1), begin(tempPt));
+                points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
+            }
 
             // next position start
             currentP1[0] += unitX[0]*endEffectorWidth;
             currentP1[1] += unitX[1]*endEffectorWidth;
-            // safty height
-            tempPt[0] = currentP1[0];
-            tempPt[1] = currentP1[1] + safeHeight*tan(plateInclination);
-            tempPt[2] = currentP1[2] + safeHeight;
-            tempPt[6] = safeT*2;
-            points.push_back(vector<double>(tempPt, tempPt+7)); // next plate safty height
-            if(i == moveNumP - 1){ continue; }
+            // // safty height
+            // tempPt[0] = currentP1[0];
+            // tempPt[1] = currentP1[1] + safeHeight*tan(plateInclination);
+            // tempPt[2] = currentP1[2] + safeHeight;
+            // tempPt[6] = safeT*2;
+            // points.push_back(vector<double>(tempPt, tempPt+7)); // next plate safty height
+            if(i == moveNumP - 1){
+                if(!lastMove){
+                    tempPt[2] += safeHeight;
+                    tempPt[6] = safeT;
+                    points.push_back(vector<double>(tempPt, tempPt+7)); // staight plate safty height
+                }
+                continue;
+            }
             copy(begin(currentP1), end(currentP1), begin(tempPt));
-            tempPt[6] = safeT;
+            tempPt[6] = endEffectorWidth/velLmt*1000*2; // move by one endEffectorWidth time
             points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
         }
         if(lastMove){
@@ -99,12 +109,14 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
             tempPt[6] = safeT;
             points.push_back(vector<double>(tempPt, tempPt+7)); // plate last top
 
-            tempPt[2] += tankDepth; // z-axis
-            tempPt[1] -= tankDepth/tan(plateInclination); // y-axis
-            tempPt[6] = plateT;
-            points.push_back(vector<double>(tempPt, tempPt+7)); // plate bottom
-            copy(begin(plateLast), end(plateLast), begin(tempPt));
-            points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
+            for (int b = 0; b < brushTimes; b++){
+                tempPt[2] += tankDepth; // z-axis
+                tempPt[1] -= tankDepth/tan(plateInclination); // y-axis
+                tempPt[6] = plateT;
+                points.push_back(vector<double>(tempPt, tempPt+7)); // plate bottom
+                copy(begin(plateLast), end(plateLast), begin(tempPt));
+                points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
+            }
             tempPt[1] += safeHeight*tan(plateInclination);
             tempPt[2] += safeHeight;
             tempPt[6] = safeT;
