@@ -5,6 +5,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <ctime>
 #include <thread>
 #include <stdio.h>
 #include <conio.h>
@@ -41,6 +42,7 @@ double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" co
 double in1[6] = {2.201, -3.382, 0.932, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
+ofstream logfile;
 
 int main()
 {
@@ -195,15 +197,21 @@ int main()
         return -3;
     }
     
+    time_t now = time(0);
+    tm *fn = localtime(&now);
+    string fName = to_string(1900+fn->tm_year) +"-"+ to_string(1+fn->tm_mon) +"-"+ to_string(fn->tm_mday) +" "+ to_string(fn->tm_hour) +"."+ to_string(fn->tm_min);
+    logfile.open ("Data Log\\" +fName+ ".txt");
+    if(logfile.is_open()){ cout << "--------------Data logging has started--------------\n"; }
+    logfile << fName << endl;
+
     cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\ni - Info: show menu\nn - Prepare to disable motors and exit programme" << endl;
-    
     do {
         cin >> cmd;
         ifstream file ("traj.csv");
         vector<double> row;
         string line, word, temp;
         switch (cmd){
-            case 'i':    
+            case 'i':    // Show menu
                 cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\ni - Info: show menu\nn - Prepare to disable motors and exit programme" << endl;
                 break;
             case 't':   // Read traj file
@@ -225,12 +233,13 @@ int main()
                     cout << "Failed to read input file. Exit programme." << endl;
                     return -1;
                 }
-
+                logfile << "\n--Trajectory Mode--\n";
                 RunTrajPoints();
                 break;
             case 'm':   // Manual wasdrf
             case 'M':
                 cout << "Press 'q' to quit manual input anytime.\n'h' for Homing.\n'x' to adjust increment step size.\n";
+                logfile << "\n--Manual Mode--\n";
                 while(cmd != 'q' && cmd != 'Q'){
                     cmd = getch();
                     switch(cmd){
@@ -336,7 +345,7 @@ int main()
                 }
                 cout << "Quit manual control\n";
                 break;
-            case 'p':   // 
+            case 'p':   // Parameterized traj
             case 'P':
                 parameter_traj(points, in1);
                 
@@ -350,12 +359,18 @@ int main()
                 
                 cout << "Are you sure to run the parameterized trajectory? (y - confirm run trajectory / b - back to section menu)\n";
                 cin >> cmd;
-                if(cmd == 'y' || cmd == 'Y'){ RunTrajPoints(); }
+                if(cmd == 'y' || cmd == 'Y'){
+                    logfile << "\n--Parameterized Trajectory Mode--\n";
+                    RunTrajPoints();
+                }
                 break;
         }
     } while(cmd != 'n'); 
     
-    Sleep(1000); // wait a little more before disabling the nodes
+    Sleep(500); // wait a little more before disabling the nodes
+    now = time(0);
+    fn = localtime(&now);
+    logfile << "\nStart shut down process at " << fn->tm_hour << ":" << fn->tm_min << endl;
 
     // Saving last position before quiting programme
     cout << "Saving last position...\n";
@@ -379,6 +394,8 @@ int main()
     }
     nodeList.clear();
     myMgr->PortsClose(); // Close down the ports
+    logfile << "System shut down successful.\n";
+    logfile.close(); // Close the log file
     
     cout << "\n" << "Done at " << myMgr->TimeStampMsec() << endl;
     return 0;   
@@ -595,6 +612,9 @@ void SendMotorCmd(int n){
     catch(sFnd::mnErr& theErr) {    //This catch statement will intercept any error from the Class library
         cout << "\nERROR: Motor [" << n << "] command failed.\n";  
         printf("Caught error: addr=%d, err=0x%08x\nmsg=%s\n", theErr.TheAddr, theErr.ErrorCode, theErr.ErrorMsg);    
+        logfile << "\nERROR: Motor [" << n << "] command failed.\n";  
+        logfile << "Caught error: addr=" << theErr.TheAddr << ", err=" << theErr.ErrorCode << "\nmsg=" << theErr.ErrorMsg << endl;    
+        logfile.close(); // Close the log file
     }
     // double trqMeas = nodeList[n]->Motion.TrqMeasured;
     // cout << "Node " << n << " " << step << "\tTorque: "<< trqMeas << endl;
@@ -628,6 +648,7 @@ void SendMotorGrp(bool IsTorque){
     IPort &myPort = myMgr->Ports(0);
     void (*func)(int){ SendMotorCmd };
     if(IsTorque){ func = SendMotorTrq; }
+    else { logfile << in1[0] << ", " << in1[1] << ", " << in1[2] << ", " << in1[3] << ", " << in1[4] << ", " << in1[5] << endl; }
 
     thread nodeThreads[nodeNum];
     for(int i = 0; i < nodeNum; i++){

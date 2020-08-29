@@ -48,6 +48,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     for(double val : unitPlate){ cout << val << "\t"; }
     cout << "unit vector of Plate\n";
     int moveNumP = (tankX[0]-tankStart[0])/endEffectorWidth/unitX[0] + 1; // number of cleaning cycle on one plate, including start and end pose
+    if(moveNumP < 1){ moveNumP = 1; } // Safety, brush at least once
     double leftover = remainder(tankX[0]-tankStart[0], endEffectorWidth*unitX[0]);
     lastMove = leftover < 0 || leftover > 0.01; // check if reminder is present
     cout << "moveNumP = " << moveNumP << ", last move = " << lastMove << ", leftover = " << leftover << endl;
@@ -129,7 +130,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
         // next plate start
         currentP2[0] += unitPlate[0];
         currentP2[1] += unitPlate[1];
-        tempPt[6] = sqrt(pow(currentP2[0]-currentP1[0],2)+pow(currentP2[1]-currentP1[1],2))/velLmt*1000; // calculate time first
+        tempPt[6] = sqrt(pow(currentP2[0]-currentP1[0],2)+pow(currentP2[1]-currentP1[1],2))/velLmt*1000*1.8; // calculate time first
         copy(begin(currentP2), end(currentP2), begin(currentP1));
         // next safty height
         tempPt[0] = currentP1[0];

@@ -45,13 +45,18 @@ h - Move to Home
 u - Update position from external "currentPos.csv" file
 - Read the "currentPos.csv" file and update the in1[] array. The motor counters will be updated accordingly.
 - Please use Leica to find the current position, then update the "currentPos.csv" and save it before running this command.
-- __WARNING!__ This command has never been tested on the system. It may have bug.
+
+i - Info: show menu
+- Use this command for showing the menu of the initialization section.
 
 n - Move on to Next section
 - Move on to the next section of the programme. Menu of the next section will appear.
 - If any commands or functions from this section is needed afterwards, please safely quit the programme and restart it. (ie. there is no going back QAQ)
 
 ### Operation mode
+Upon reaching this section of the programme, data logging would start, recording the modes used and the points commanded. Saved files can be found in the "Data Log" folder.
+
+
 t - Read from \"traj.csv\" file for pre-set trajectory
 - Define the trajectory in the form of 6 DoF pose and time in ms a line (eg. 2.197, -3.599, 0.744, 0, 0, 0, 350).
 - Save the file before running the "t" command.
@@ -67,12 +72,14 @@ m - Manual input using w,a,s,d,r,f,g,v
 - 'q' for exiting manual input mode.
 
 p - Parameterized trajectory
-- __WARNING!__ This piece of code has never been tested on the system, so good luck. XP
 - All the parameters are saved in the "parameter_traj.cpp" file, so please safely quit the programme, save the new parameters and compile sc_motor_drive.cpp __before__ running this command.
 - To find the tankStart[3], tankX[3], tankY[3] coordinates, poke the tank with the end-effector __within__ the tank with the manual mode (refer to 'm' command above, read the in1[] from prompt). This sets the limits of where the end-effector would go.
 - Please also define tankDepth, plateNum, and endEffectorWidth, especially when the end-effector is changed or replaced. Please refer to the comments in the .cpp file.
 - The generated trajectory is like a downward facing "E". 
 - __IMPORTANT!__ System emergency stop is implemented. (Further details please refer to 't' command above)
+
+i - Info: show menu
+- Use this command for showing the menu of the operation section.
 
 n - Prepare to disable motors and exit programme
 - Move on to the next section of the programme, which is to prepare for shut down.
@@ -81,9 +88,9 @@ n - Prepare to disable motors and exit programme
 Upon coming to this point of the programme, it will prompt you whether you would like to move the robot to its home before disabling the motors.
 If you are to cut off the power supply afterwards, please home the robot first, because the internal counts of the motors will be lost.
 Otherwise, you can simply update the currentPos.csv upon restarting the programme.
-The last position of the robot will also be saved in the "data.txt" file.
+The last position of the robot will also be saved in the "lastPos.txt" file.
 
 If you have not safely come to this part of the programme, then the programme has probably crashed.....
 But hope that you can find a way to recover the robot / system from the functions in the initialization section when you restart the programme. Good luck ;)
 
-_Last updated on 19/8/2020_
+_Last updated on 29/8/2020_
