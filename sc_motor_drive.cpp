@@ -34,11 +34,11 @@ vector<double> spcLimit;
 unsigned int portCount;
 const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors before compiling the programme
 double step = 0.01; // in meters, for manual control
-float targetTorque = -2.5; // in percentage, -ve for tension?
+float targetTorque = -2.5; // in %, -ve for tension, also need to UPDATE in switch case 't'!!!!!!!!!
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {2.18, -3.263, 1.2, 0, 0, 0}; // home posisiton //TODO: make a txt file for this?
+double home[6] = {2.201, -3.382, 0.932, 0, 0, 0}; // home posisiton
 double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" command
-double in1[6] = {2.197 , -2.92, 1.02399, 0, 0, 0};
+double in1[6] = {2.201, -3.382, 0.932, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 
@@ -60,7 +60,7 @@ int main()
     }
     IPort &myPort = myMgr->Ports(0);
 
-    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update position from external file\nn - Move on to Next step" << endl;
+    cout << "Motor network available. Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update current position from external file\ni - Info: show menu\nn - Move on to Next step" << endl;
     pose_to_length(home, offset); // save offset values according to home pose
     char cmd;
     try{
@@ -68,22 +68,18 @@ int main()
             bool allDone = false, stabilized = false;
             cin >> cmd;
             switch (cmd){
-                case 'y':
+                case 'i':   // Show menu
+                    cout << "Pick from menu for the next action:\nt - Tighten cables with Torque mode\ny - Loose the cables\ns - Set current position as home\nh - Move to Home\n8 - Manually adjust cable lengths\nu - Update current position from external file\ni - Info: show menu\nn - Move on to Next step" << endl;
+                    break;
+                case 'y':   // Loosen cables using positive torque
                     targetTorque = 1;
                 case 't':   // Tighten cables according to torque
                     cout << "Current target torque = " << targetTorque << endl;
                     for(INode* n : nodeList){ n->Motion.AccLimit = 200; }
                     while(!stabilized) {
                         SendMotorGrp(true);
-                        // while(!allDone) {
-                        //     for (INode* n : nodeList) {
-                        //         // if(!n->Motion.MoveIsDone()) { break; }
-                        //         if(!n->Motion.VelocityAtTarget()) { break; }
-                        //         allDone = true;
-                        //     }
-                        // }
                         Sleep(50);
-                    for (int n = 0; n < nodeList.size(); n++){
+                        for (int n = 0; n < nodeList.size(); n++){
                             if(nodeList[n]->Motion.TrqCommanded.Value() > targetTorque) { break; }
                             stabilized = true;
                         }
@@ -189,6 +185,7 @@ int main()
                         cout << endl;
                     }
                     break;
+                
             }
         } while(cmd != 'n');
     }
@@ -198,7 +195,7 @@ int main()
         return -3;
     }
     
-    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\nn - Prepare to disable motors and exit programme" << endl;
+    cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\ni - Info: show menu\nn - Prepare to disable motors and exit programme" << endl;
     
     do {
         cin >> cmd;
@@ -206,6 +203,9 @@ int main()
         vector<double> row;
         string line, word, temp;
         switch (cmd){
+            case 'i':    
+                cout << "Choose from menu for cable robot motion:\nt - Read from \"traj.csv\" file for pre-set trajectory\nm - Manual input using w,a,s,d,r,f,g,v\np - Parameterized trajectory\ni - Info: show menu\nn - Prepare to disable motors and exit programme" << endl;
+                break;
             case 't':   // Read traj file
             case 'T':
                 // Read input file for traj-gen
@@ -230,7 +230,7 @@ int main()
                 break;
             case 'm':   // Manual wasdrf
             case 'M':
-                cout << "Press 'q' to quit manual input anytime.\n'h' for Homing.\n'p' to adjust increment step size.\n";
+                cout << "Press 'q' to quit manual input anytime.\n'h' for Homing.\n'x' to adjust increment step size.\n";
                 while(cmd != 'q' && cmd != 'Q'){
                     cmd = getch();
                     switch(cmd){
@@ -274,8 +274,8 @@ int main()
                             TrjHome();
                             //copy(begin(home), end(home), begin(in1));
                             break;
-                        case 'P':
-                        case 'p':
+                        case 'X':
+                        case 'x':
                             cout << "Current step size: " << step << "m. Please enter new step size: ";
                             cin >> step;
                             if (!cin.good()){ cout << "Invalid input!"; }
@@ -348,7 +348,7 @@ int main()
                 }
                 pfile.close();
                 
-                cout << "Are you sure to run the parameterized trajectory? (y - confirm run trajectory)\n";
+                cout << "Are you sure to run the parameterized trajectory? (y - confirm run trajectory / b - back to section menu)\n";
                 cin >> cmd;
                 if(cmd == 'y' || cmd == 'Y'){ RunTrajPoints(); }
                 break;
