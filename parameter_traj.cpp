@@ -16,19 +16,20 @@ bool lastMove = false;
 
 void parameter_traj(vector<vector<double>>& points, double startPos[]){
 /////////////////// Define the tank parameters here ///////////////////
-    double tankStart[3] = {2.21, -2.484, 0.448}; // poke with end effector
-    double tankX[3] = {2.28, -2.484, 0.448}; // poke with end effector
-    double tankY[3] = {2.19, -3.594, 0.448}; // poke with end effector
-    double tankDepth = -0.2; // meter, define depth from experience?
+    double tankStart[3] = {2.198, -2.8314, 0.463}; // poke with end effector
+    double tankX[3] = {2.205, -2.8314, 0.463}; // poke with end effector (end of cleaning area)
+    double tankY[3] = {2.185, -3.6644, 0.463}; // poke with end effector (end of cleaning area)
+    double tankDepth = -0.31; // meter, define depth from experience?
 
     double plateInclination = 0.959931; // radian, 55 degree, from horizon
     // Vector3d plateDistance(2.237, -3.486, 0); // addition going to next plate start
-    int plateNum = 10; // number of plates to clean
+    int plateNum = 8; // number of plates to clean
     
-    double endEffectorWidth = 0.05; // meter
+    double endEffectorWidth = 0.2; // meter
     // float overlapPercentage = 0.1;
     
     double safeHeight = 0.1; // meter, safety height above tank
+    double leaveTankHeight = 0.5; // meter, saftey height above tank for start and end of traj
     double velLmt = 0.05; // unit in meters per sec
     double zeroRotation[3] = {0,0,0};
     int brushTimes = 1;
@@ -45,7 +46,7 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     double unitPlate[3] = {(tankY[0]-tankStart[0])/(plateNum-1), (tankY[1]-tankStart[1])/(plateNum-1), (tankY[2]-tankStart[2])/(plateNum-1)};
     for(double val : unitX){ cout << val << "\t"; }
     cout << "unit vector of X\n";
-    for(double val : unitPlate){ cout << val << "\t"; }
+    for(double val : unitPlate){ cout << val << "\t"; } 
     cout << "unit vector of Plate\n";
     int moveNumP = (tankX[0]-tankStart[0])/endEffectorWidth/unitX[0] + 1; // number of cleaning cycle on one plate, including start and end pose
     if(moveNumP < 1){ moveNumP = 1; } // Safety, brush at least once
@@ -59,11 +60,13 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
     copy(begin(zeroRotation), end(zeroRotation), tempPt+3); // set the rotation as zero for all time?
     
     // from current position to start pose
-    double dura = sqrt(pow(startPos[0]-tankStart[0],2)+pow(startPos[1]-tankStart[1],2)+pow(startPos[2]-tankStart[2],2))/velLmt*1000; // *1000 to change unit to ms
     tempPt[0] = tankStart[0];
     tempPt[1] = tankStart[1] + safeHeight*tan(plateInclination);
-    tempPt[2] = tankStart[2] + safeHeight;
-    tempPt[6] = dura;
+    tempPt[2] = tankStart[2] + safeHeight + leaveTankHeight;
+    tempPt[6] = sqrt(pow(startPos[0]-tempPt[0],2)+pow(startPos[1]-tempPt[1],2)+pow(startPos[2]-tempPt[2],2))/velLmt*1000; // *1000 to change unit to ms
+    points.push_back(vector<double>(tempPt, tempPt+7)); // safety leave tank height above start point
+    tempPt[2] -= leaveTankHeight; // real safety height above tank
+    tempPt[6] = leaveTankHeight/velLmt*1000;
     points.push_back(vector<double>(tempPt, tempPt+7)); // safety height above start point
     copy(begin(tankStart), end(tankStart), begin(tempPt));
     tempPt[6] = safeT;
@@ -141,4 +144,8 @@ void parameter_traj(vector<vector<double>>& points, double startPos[]){
         tempPt[6] = safeT;
         points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
     }
+    // Ending point to leave completely from tank
+    tempPt[2] += leaveTankHeight;
+    tempPt[6] = leaveTankHeight/velLmt*1000;
+    points.push_back(vector<double>(tempPt, tempPt+7)); // plate top
 }

@@ -37,9 +37,9 @@ const int nodeNum = 8; // !!!!! IMPORTANT !!!!! Put in the number of motors befo
 double step = 0.01; // in meters, for manual control
 float targetTorque = -2.5; // in %, -ve for tension, also need to UPDATE in switch case 't'!!!!!!!!!
 const int MILLIS_TO_NEXT_FRAME = 35; // note the basic calculation time is abt 16ms
-double home[6] = {2.201, -3.382, 0.932, 0, 0, 0}; // home posisiton
+double home[6] = {2.216, -3.582, 1.035, 0, 0, 0}; // home posisiton
 double offset[8]; // L0, from "zero posi1tion", will be updated by "set home" command
-double in1[6] = {2.201, -3.382, 0.932, 0, 0, 0};
+double in1[6] = {2.211, -3.482, 1.012, 0, 0, 0};
 double out1[8] = {2.87451, 2.59438, 2.70184, 2.40053, 2.46908, 2.15523, 2.65123, 2.35983}; // assume there are 8 motors
 double a[6], b[6], c[6], d[6], e[6], f[6], g[6], tb[6]; // trajectory coefficients
 ofstream logfile;
@@ -486,13 +486,14 @@ int SolveParaBlend(int loop_i, bool showAttention){
     float aMax[6] = {50, 50, 50, 10, 10, 10}; // m/s^2, define the maximum acceleration for each DoF
     double sQ[6], Q[6], o[6];
     double dura = points[loop_i][6];
+    double unitV = sqrt(pow(points[loop_i][0] - in1[0], 2) + pow(points[loop_i][1] - in1[1], 2) + pow(points[loop_i][2] - in1[2], 2)); // the root to divide by to get unit vector
     
     for(int i = 0; i < 6; i++){
         sQ[i] = in1[i];
         Q[i] = points[loop_i][i];
         vMax[i] /= 1000; // change the velocity unit to meter per ms
         aMax[i] /= 1000000; // change the unit to meter per ms square
-        tb[i] = dura - (Q[i] - sQ[i]) / vMax[i];
+        tb[i] = i<3 ? dura - unitV / vMax[i] : dura - abs(Q[i] - sQ[i]) / vMax[i];
         if(tb[i] < 0) {
             cout << "WARNING: Intended trajectory exceeds velocity limit in DoF "<< i << ".\n";
             return -1;
@@ -502,6 +503,8 @@ int SolveParaBlend(int loop_i, bool showAttention){
             tb[i] = dura / 2;
             vMax[i] = 2 * (Q[i] - sQ[i]) / dura;
         }
+        else if (i < 3) { vMax[i] = vMax[i] * (Q[i] - sQ[i]) / unitV; } // vMax in x,y,z accordingly
+        else if (Q[i] < sQ[i]) { vMax[i] *= -1; } //Fix velocity direction for rotation
         o[i] = vMax[i] / 2 / tb[i];
         if(abs(o[i]*2) > aMax[i]){
             cout << "WARNING: Intended trajectory acceleration <" << abs(o[i]*2) << "> exceeds limit in DoF "<< i << ".\n";
@@ -604,7 +607,7 @@ int32_t ToMotorCmd(int motorID, double length){
 void SendMotorCmd(int n){
     // convert to absolute cable length command
     try{
-         int32_t step = ToMotorCmd(n, out1[n]);
+        int32_t step = ToMotorCmd(n, out1[n]);
         nodeList[n]->Motion.MoveWentDone();
         nodeList[n]->Motion.MovePosnStart(step, true, true); // absolute position
         nodeList[n]->Motion.Adv.TriggerGroup(1);
